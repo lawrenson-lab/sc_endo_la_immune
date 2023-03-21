@@ -1,0 +1,79 @@
+---
+title: "Figure 1"
+author: "Pak Yu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Figure 1 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Library loading 
+
+
+```{r ,message = FALSE}
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(broom)
+```
+
+```{r}
+endo_cluster <- readRDS("data/AtlasEndometriosis/rds/aux.seurat.rds")
+```
+
+## Fig 1A
+
+```{r}
+
+```
+
+## Fig 1F
+PCA based on the following cell proportion for each samples:
+
+
+
+```{r}
+heatmap_df <- immue_endo_t  %>% 
+              dplyr::select(Final_parent_immune_cluster,prop,SampleName) %>%
+              spread(Final_parent_immune_cluster, prop) %>%
+              column_to_rownames("SampleName") %>%
+              as.matrix() %>%
+              replace(.,is.na(.),0) %>%
+              t()
+
+heatmap_df %>% 
+t %>%
+prcomp(scale = TRUE) %>%
+augment() %>%
+inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
+  ggplot(aes(x=.fittedPC1, y=.fittedPC2,color=LA_Status,label=.rownames))+
+  geom_point(size=5) +
+  geom_text(nudge_x = 0.2, nudge_y = 0.2,angle=20,size=3) +
+  labs(x="PC1",y="PC2") + 
+  theme_half_open(12) 
+```
+
+# Final Fig pannel combine using cowplot
+
+```{r}
+fig1top <- plot_grid(fig1a, fig1b, labels = c("A", "B"), ncol = 2, label_size = 10, rel_widths = c(1, 1.15) )
+fig1middle <- plot_grid(fig1c, fig1d, NULL, labels = c("C", "D"), ncol = 3, label_size = 10)
+fig1bottom <- plot_grid(fig1e, fig1f, NULL, labels = c("E", "F"), ncol = 3, label_size = 10)
+fig1 <- plot_grid(fig1top, fig1middle,fig1bottom ,ncol = 1, label_size = 10, align = 'v', hjust=-6, rel_heights = c(0.5, 0.25))
+```
+
+#save figures
+
+```{r}
+ggsave("data/fig2.pdf",fig1, width = 210, 
+       height = 148.5, 
+       units = "mm")
+```
+
+
+
+
+

@@ -1,0 +1,41 @@
+---
+title: "Figure 2"
+author: "Marcela Haro"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# Figure 2 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+getwd()
+
+"data/soemthing"
+```
+
+
+
+
+## Library loading 
+
+
+```{r ,message = FALSE}
+
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(broom)
+library(ggplot2)
+library(dplyr)
+library(reshape)
+library(clusterProfiler)
+library(readxl)
+library(ggrepel)
+library(clustree)
+```

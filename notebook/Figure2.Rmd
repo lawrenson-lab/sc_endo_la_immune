@@ -121,12 +121,12 @@ Immune.Cells.Subset <- Immune.Cells
 
 ##Subclustering just the Immune cells from LA high low
 Immune.cells.subclustering <- FindNeighbors(Immune.Cells.Subset, dims = 1:20)
-Immune.cells.subclustering <- FindClusters(Immune.cells.subclustering, resolution = 0.4)
+Immune.cells.subclustering <- FindClusters(Immune.cells.subclustering, resolution = 1)
 Immune.cells.subclustering <- RunUMAP(Immune.cells.subclustering, dims = 1:20)
 
 p1 <- DimPlot(Immune.cells.subclustering, reduction = "umap", label =  TRUE, raster = FALSE) + 
   theme_classic(base_size = 20) +
-  ggtitle('UMAP of Immune cells subclusters Res 0.4')
+  ggtitle('UMAP of Immune cells subclusters Res 1')
 
 p1
 
@@ -137,7 +137,7 @@ Immune.cells.subclustering@meta.data <- droplevels(Immune.cells.subclustering@me
 Immune.cells.subclustering@meta.data %>% 
       group_by(seurat_clusters %>% as.character()) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
-      print(n=26)
+      print(n=43)
 ```
 
 ```{r}
@@ -150,7 +150,7 @@ selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
 ```
 
 ```{r}
-p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell Sub-cluster by Canonical Markers res0.4") +
+p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell Sub-cluster by Canonical Markers res1") +
  theme_classic(base_size = 20) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
   coord_flip() +
@@ -160,10 +160,15 @@ p1
 ```
 
 
+```{r}
+Immune.subcluster.DEG <- FindAllMarkers(Immune.cells.subclustering, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+```
+
+
 #remove non-Immune cell clusters
 ```{r}
 #Pull out True Immune cells.
-Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(9, 10, 12, 13, 16:18, 21, 25), invert = TRUE)
+Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(11, 17, 18, 22:24, 26, 31:35, 37, 38, 40:42), invert = TRUE)
 
 Immune.Cells.True.subsetting <- Immune.Cells.True
 
@@ -196,5 +201,9 @@ p1 <-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = selected.features) +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 p1
+```
+
+```{r}
+
 ```
 

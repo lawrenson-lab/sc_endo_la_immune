@@ -2,5 +2,7 @@
 *
 # Except these files
 !endo_LA_Summary.csv
+!Annotation tracker.xlsx
+!Immune_Marker.csv
 !cell_chat_db_communication.csv
 !.gitignore

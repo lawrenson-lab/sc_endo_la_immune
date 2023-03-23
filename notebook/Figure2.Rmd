@@ -15,8 +15,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 getwd()
-
-"data/soemthing"
 ```
 
 
@@ -39,3 +37,164 @@ library(readxl)
 library(ggrepel)
 library(clustree)
 ```
+
+
+#Loading the scRNAseq data and loading into seurat object
+```{r}
+#reading the Seurat object RDS file
+d10x.seurat <- readRDS("/media/Data01/abraaodem/Code/AtlasEndometriosis/rds/aux.seurat.rds")
+```
+
+
+```{r}
+##To confirm annotation
+table(d10x.seurat@meta.data$active.cluster)
+```
+
+
+
+#adding more columns to meta data: based on pathology LA status classified patients as LA high or low, also have a colum for each tissue to say if it has any LAs(yes/no)
+```{r}
+#adding more columns to metadata about the LA immune activity at patient leve (High/Low); this is Yes/No LA activity for each tissue specimen (Yes/No).
+
+##Note tissue activity need to be updated in the annoatation tracker file. Just use the immune_activity column that is coming from the patient_la_anno
+
+excel_path <- "data/Annotation tracker.xlsx"
+sheets <- readxl::excel_sheets(excel_path)
+Annotation_tracker <- sheets %>% 
+                      lapply(. , function(s){ read_excel(excel_path, sheet = s) %>%
+                                              mutate(across(everything(),as.factor))}) %>%
+                      setNames(sheets)
+```
+
+```{r}
+Annotation_tracker$Clusters <- Annotation_tracker$Clusters %>% 
+                            mutate(Master_Assigned_Cell_Type= if_else(is.na(Updated_Anno),Master_Assigned_Cell_Type,Updated_Anno) ) %>% 
+                            dplyr::select(-Updated_Anno)
+
+back_up_meta_table <- d10x.seurat@meta.data 
+
+d10x.seurat@meta.data <- back_up_meta_table  %>%
+              rownames_to_column() %>%
+              left_join(Annotation_tracker$Clusters,by=c("SCT_snn_res.3"="Cluster_Number")) %>%
+              left_join(Annotation_tracker$tissue_sample_meta, by=c("Anatomic.annotation" = "Anatomic.annotation","orig.ident"= "Orig.ident" )) %>%
+              left_join(Annotation_tracker$Epi_Data %>% mutate(Patient_ID = as.integer(Patient_ID)), by=c("Patient.No."="Patient_ID")) %>%
+  column_to_rownames()
+```
+
+
+```{r}
+##To confirm annotation
+table(d10x.seurat@meta.data$Master_Assigned_Cell_Type)
+```
+
+
+
+```{r}
+#UMAPS of all the cells
+
+#DimPlot(d10x.seurat, reduction = "umap", label =FALSE, raster = FALSE) ##This is a umap with all the clusters
+
+cluster.cols = c("#67001f", "#a50026", "#d73027", "#f46d43", "#fdae61", "#fee090", "#ffffbf", "#a6dba0", "#1a9850", "#e0f3f8", "#abd9e9")
+
+p1 <- DimPlot(object = d10x.seurat, pt.size = 0.1, group.by ="Master_Assigned_Cell_Type", cols = cluster.cols, label = T, raster=FALSE) +
+  theme_classic(base_size = 20) ##this is a umap with the clusters grouped with their cell identity
+
+p1
+
+#pdf(file = "Plots/Endometriosis_LA_Immune/Original Cell Clusters.pdf", width = 15, height = 15) 
+#p1
+#dev.off()
+```
+
+
+
+#pull out Immune cells from the data set
+```{r}
+###pull out just the Immune cells
+Immune.Cells <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c("B/Plasma cells", "T/NK cells", "Myeloid cells", "Mast cells"))
+```
+
+
+```{r}
+Immune.Cells.Subset <- Immune.Cells
+
+##Subclustering just the Immune cells from LA high low
+Immune.cells.subclustering <- FindNeighbors(Immune.Cells.Subset, dims = 1:20)
+Immune.cells.subclustering <- FindClusters(Immune.cells.subclustering, resolution = 0.4)
+Immune.cells.subclustering <- RunUMAP(Immune.cells.subclustering, dims = 1:20)
+
+p1 <- DimPlot(Immune.cells.subclustering, reduction = "umap", label =  TRUE, raster = FALSE) + 
+  theme_classic(base_size = 20) +
+  ggtitle('UMAP of Immune cells subclusters Res 0.4')
+
+p1
+
+
+#removing levels that are empty (only keeping the values in the vectors I want) and getting the numb tisseue, n_patient, and n_cells
+Immune.cells.subclustering@meta.data <- droplevels(Immune.cells.subclustering@meta.data)
+
+Immune.cells.subclustering@meta.data %>% 
+      group_by(seurat_clusters %>% as.character()) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=26)
+```
+
+```{r}
+#Immune markers to identify immune cells
+Immune.markers = read.delim("data/Immune_Marker.csv", sep = ",")
+head(Immune.markers)
+
+#selected.features = unique(c(as.character(unique(Immune.markers$Positive)), as.character(unique(Immune.markers$Negative))))
+selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
+```
+
+```{r}
+p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell Sub-cluster by Canonical Markers res0.4") +
+ theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+p1
+```
+
+
+#remove non-Immune cell clusters
+```{r}
+#Pull out True Immune cells.
+Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(9, 10, 12, 13, 16:18, 21, 25), invert = TRUE)
+
+Immune.Cells.True.subsetting <- Immune.Cells.True
+
+Immune.Cells.TrueV2 <- FindNeighbors(Immune.Cells.True.subsetting, dims = 1:20)
+Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 0.3)
+Immune.Cells.TrueV2 <- RunUMAP(Immune.Cells.TrueV2, dims = 1:20)
+
+table(Immune.Cells.TrueV2@meta.data$seurat_clusters)
+
+clustree(Immune.Cells.TrueV2)
+
+p1 <- DimPlot(Immune.Cells.TrueV2, reduction = "umap", label =  TRUE, raster = FALSE) + 
+  theme_classic(base_size = 20) +
+  ggtitle('UMAP of Immune cells TrueV2 subclusters Res 0.3')
+
+p1
+
+#removing levels that are empty (only keeping the values in the vectors I want) and getting the numb tisseue, n_patient, and n_cells
+Immune.Cells.TrueV2@meta.data <- droplevels(Immune.Cells.TrueV2@meta.data)
+
+Immune.Cells.TrueV2@meta.data %>% 
+      group_by(seurat_clusters %>% as.character()) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=17)
+
+p1 <-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell TrueV2 Sub-cluster by Canonical Markers res0.3") +
+ theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+p1
+```
+

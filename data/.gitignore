@@ -4,5 +4,8 @@
 !endo_LA_Summary.csv
 !Annotation tracker.xlsx
 !Immune_Marker.csv
+!Immune_subcluster_DEG_list.csv
+!Immune_Cells_TrueV2_DEG_list.csv
+!Bcells_PlasmaCells_Markers.csv
 !cell_chat_db_communication.csv
 !.gitignore

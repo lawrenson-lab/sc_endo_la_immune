@@ -18,17 +18,48 @@ library(Seurat)
 library(tidyverse)
 library(cowplot)
 library(broom)
+library(readxl)
 ```
 
 ```{r}
 endo_cluster <- readRDS("data/AtlasEndometriosis/rds/aux.seurat.rds")
 ```
 
+
+#adding more columns to meta data: based on pathology LA status classified patients as LA high or low, also have a colum for each tissue to say if it has any LAs(yes/no)
+```{r}
+#adding more columns to metadata about the LA immune activity at patient leve (High/Low); this is Yes/No LA activity for each tissue specimen (Yes/No).
+
+##Note tissue activity need to be updated in the annoatation tracker file. Just use the immune_activity column that is coming from the patient_la_anno
+
+MajorGroups = read_xlsx("data/Clusters_Major_Groups.xlsx", sheet = 1)
+```
+
+```{r}
+back_up_meta_table <- d10x.seurat@meta.data 
+
+d10x.seurat@meta.data <- back_up_meta_table  %>%
+              rownames_to_column() %>%
+              left_join(Annotation_tracker$Clusters,by=c("SCT_snn_res.3"="Cluster_Number")) %>%
+              left_join(Annotation_tracker$tissue_sample_meta, by=c("Anatomic.annotation" = "Anatomic.annotation","orig.ident"= "Orig.ident" )) %>%
+              left_join(Annotation_tracker$Epi_Data %>% mutate(Patient_ID = as.integer(Patient_ID)), by=c("Patient.No."="Patient_ID")) %>%
+              left_join(MajorGroups$tissue_sample_meta, by=c("Anatomic.annotation" = "Anatomic.annotation","orig.ident"= "Orig.ident" )) %>%
+  column_to_rownames()
+```
+
+
+
+
+
+
+
+
 ## Fig 1A
 
 ```{r}
 
 ```
+
 
 ## Fig 1F
 PCA based on the following cell proportion for each samples:

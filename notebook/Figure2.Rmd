@@ -42,13 +42,13 @@ library(pheatmap)
 #Loading the scRNAseq data and loading into seurat object
 ```{r}
 #reading the Seurat object RDS file
-d10x.seurat <- readRDS("/media/Data01/abraaodem/Code/AtlasEndometriosis/rds/aux.seurat.rds")
+d10x.seurat <- readRDS("fixed_annotated_aux.seurat.rds")
 ```
 
 
 ```{r}
 ##To confirm annotation
-table(d10x.seurat@meta.data$active.cluster)
+table(d10x.seurat@meta.data$Master_Assigned_Cell_Type)
 ```
 
 
@@ -65,13 +65,6 @@ Annotation_tracker <- sheets %>%
                       lapply(. , function(s){ read_excel(excel_path, sheet = s) %>%
                                               mutate(across(everything(),as.factor))}) %>%
                       setNames(sheets)
-
-excel_path <- "data/Clusters_Major_Groups.xlsx"
-sheets <- readxl::excel_sheets(excel_path)
-MajorGroups <- sheets %>% 
-                      lapply(. , function(s){ read_excel(excel_path, sheet = s) %>%
-                                              mutate(across(everything(),as.factor))}) %>%
-                      setNames(sheets)
 ```
 
 ```{r}
@@ -83,21 +76,11 @@ back_up_meta_table <- d10x.seurat@meta.data
 
 d10x.seurat@meta.data <- back_up_meta_table  %>%
               rownames_to_column() %>%
-              left_join(Annotation_tracker$Clusters,by=c("SCT_snn_res.3"="Cluster_Number")) %>%
-              left_join(Annotation_tracker$tissue_sample_meta, by=c("Anatomic.annotation" = "Anatomic.annotation","orig.ident"= "Orig.ident" )) %>%
+              left_join(Annotation_tracker$Major_groups,by=c("seurat_clusters"="Cluster_Number")) %>%
+              left_join(Annotation_tracker$Patient_LA_Status_Tissue_Level, by=c("orig.ident"= "Orig.ident")) %>%
               left_join(Annotation_tracker$Epi_Data %>% mutate(Patient_ID = as.integer(Patient_ID)), by=c("Patient.No."="Patient_ID")) %>%
   column_to_rownames()
 
-d10x.seurat@meta.data <- d10x.seurat@meta.data %>%
-              rownames_to_column() %>%
-              left_join(MajorGroups$Sheet1, by=c("SCT_snn_res.3"="Cluster_Number")) %>%
-  column_to_rownames()
-```
-
-
-```{r}
-##To confirm annotation
-table(d10x.seurat@meta.data$Master_Assigned_Cell_Type)
 ```
 
 
@@ -133,12 +116,12 @@ Immune.Cells.Subset <- Immune.Cells
 
 ##Subclustering just the Immune cells from LA high low
 Immune.cells.subclustering <- FindNeighbors(Immune.Cells.Subset, dims = 1:20)
-Immune.cells.subclustering <- FindClusters(Immune.cells.subclustering, resolution = 1)
+Immune.cells.subclustering <- FindClusters(Immune.cells.subclustering, resolution = 3)
 Immune.cells.subclustering <- RunUMAP(Immune.cells.subclustering, dims = 1:20)
 
 p1 <- DimPlot(Immune.cells.subclustering, reduction = "umap", label =  TRUE, raster = FALSE) + 
   theme_classic(base_size = 20) +
-  ggtitle('UMAP of Immune cells subclusters Res 1')
+  ggtitle('UMAP of Immune cells subclusters Res 3')
 
 p1
 
@@ -149,7 +132,7 @@ Immune.cells.subclustering@meta.data <- droplevels(Immune.cells.subclustering@me
 Immune.cells.subclustering@meta.data %>% 
       group_by(seurat_clusters %>% as.character()) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
-      print(n=43)
+      print(n=92)
 ```
 
 ```{r}
@@ -162,7 +145,7 @@ selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
 ```
 
 ```{r}
-p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell Sub-cluster by Canonical Markers res1") +
+p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell Sub-cluster by Canonical Markers res3") +
  theme_classic(base_size = 20) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
   coord_flip() +
@@ -213,12 +196,12 @@ pheatmap(data.avg.exp.scaled,
 #remove non-Immune cell clusters
 ```{r}
 #Pull out True Immune cells.
-Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(11, 17, 18, 22:24, 26, 31:35, 37, 38, 40:42), invert = TRUE)
+Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(8, 12, 21, 23, 25, 36, 41, 43, 47, 53, 57:58, 60, 66, 68, 70, 75, 77:78, 81:82, 85, 87:91), invert = TRUE)
 
 Immune.Cells.True.subsetting <- Immune.Cells.True
 
 Immune.Cells.TrueV2 <- FindNeighbors(Immune.Cells.True.subsetting, dims = 1:20)
-Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 1)
+Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 0.3)
 Immune.Cells.TrueV2 <- RunUMAP(Immune.Cells.TrueV2, dims = 1:20)
 
 table(Immune.Cells.TrueV2@meta.data$seurat_clusters)
@@ -654,7 +637,7 @@ Endometriosis <- subset(d10x.seurat, subset = Class %in% "Peritoneal endometrios
 
 Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
 
-counts.prop = data.frame(table(Endometriosis@meta.data$Major_groups, Endometriosis@meta.data$LA_Status))
+counts.prop = data.frame(table(Endometriosis@meta.data$Major_groups, Endometriosis@meta.data$Patient_LA_Status_Tissue_Level))
 counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
 head(counts.prop.perc)
 aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
@@ -666,7 +649,7 @@ counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
 bsize = 20
 p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
   geom_bar(position="stack",stat = "identity", width=0.8) +
-  scale_fill_manual(name="LA Group", values = c("Immune cells" = "#d73027",
+  scale_fill_manual(name="Major Groups", values = c("Immune cells" = "#d73027",
                                                 "Endothelial cells" = "#f46d43",
                                                 "EnEpi cells" = "#fdae61",
                                                 "Ens cells" = "#fee090",

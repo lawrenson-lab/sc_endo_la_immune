@@ -18,17 +18,38 @@ library(Seurat)
 library(tidyverse)
 library(cowplot)
 library(broom)
+library(readxl)
+library(ggplot2)
+library(gdata)
+library(ggbeeswarm)
+library(beeswarm)
 ```
+
 
 ```{r}
-endo_cluster <- readRDS("data/AtlasEndometriosis/rds/aux.seurat.rds")
+getwd()
+
+setwd("/home/harom/Code/sc_endo_la_immune")
 ```
 
-## Fig 1A
+
+##Figure1A will be an HE of LA high with big aggregate and a small aggregate
+
+
+
+
+
+## Fig 1B Beeswarm plot of the #LA in endometrioma and endometriosis.
 
 ```{r}
+#endometrioma vs Endometriosis LA by block
+LA.extended.data = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 4)
 
+p1 <- beeswarm(Number_of_lymphoid_aggregates ~ Category, data=LA.extended.data, col=c("Endometrioma" = "#7b3294", "Endometriosis" = "#d9f0d3"), pch=19, method="swarm") 
+
+p1
 ```
+
 
 ## Fig 1F
 PCA based on the following cell proportion for each samples:

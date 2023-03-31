@@ -42,13 +42,13 @@ library(pheatmap)
 #Loading the scRNAseq data and loading into seurat object
 ```{r}
 #reading the Seurat object RDS file
-d10x.seurat <- readRDS("/media/Data01/abraaodem/Code/AtlasEndometriosis/rds/aux.seurat.rds")
+d10x.seurat <- readRDS("fixed_annotated_aux.seurat.rds")
 ```
 
 
 ```{r}
 ##To confirm annotation
-table(d10x.seurat@meta.data$active.cluster)
+table(d10x.seurat@meta.data$Master_Assigned_Cell_Type)
 ```
 
 
@@ -76,16 +76,11 @@ back_up_meta_table <- d10x.seurat@meta.data
 
 d10x.seurat@meta.data <- back_up_meta_table  %>%
               rownames_to_column() %>%
-              left_join(Annotation_tracker$Clusters,by=c("SCT_snn_res.3"="Cluster_Number")) %>%
-              left_join(Annotation_tracker$tissue_sample_meta, by=c("Anatomic.annotation" = "Anatomic.annotation","orig.ident"= "Orig.ident" )) %>%
+              left_join(Annotation_tracker$Major_groups,by=c("seurat_clusters"="Cluster_Number")) %>%
+              left_join(Annotation_tracker$Patient_LA_Status_Tissue_Level, by=c("orig.ident"= "Orig.ident")) %>%
               left_join(Annotation_tracker$Epi_Data %>% mutate(Patient_ID = as.integer(Patient_ID)), by=c("Patient.No."="Patient_ID")) %>%
   column_to_rownames()
-```
 
-
-```{r}
-##To confirm annotation
-table(d10x.seurat@meta.data$Master_Assigned_Cell_Type)
 ```
 
 
@@ -121,12 +116,12 @@ Immune.Cells.Subset <- Immune.Cells
 
 ##Subclustering just the Immune cells from LA high low
 Immune.cells.subclustering <- FindNeighbors(Immune.Cells.Subset, dims = 1:20)
-Immune.cells.subclustering <- FindClusters(Immune.cells.subclustering, resolution = 1)
+Immune.cells.subclustering <- FindClusters(Immune.cells.subclustering, resolution = 3)
 Immune.cells.subclustering <- RunUMAP(Immune.cells.subclustering, dims = 1:20)
 
 p1 <- DimPlot(Immune.cells.subclustering, reduction = "umap", label =  TRUE, raster = FALSE) + 
   theme_classic(base_size = 20) +
-  ggtitle('UMAP of Immune cells subclusters Res 1')
+  ggtitle('UMAP of Immune cells subclusters Res 3')
 
 p1
 
@@ -137,8 +132,9 @@ Immune.cells.subclustering@meta.data <- droplevels(Immune.cells.subclustering@me
 Immune.cells.subclustering@meta.data %>% 
       group_by(seurat_clusters %>% as.character()) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
-      print(n=43)
+      print(n=92)
 ```
+
 
 ```{r}
 #Immune markers to identify immune cells
@@ -150,7 +146,7 @@ selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
 ```
 
 ```{r}
-p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell Sub-cluster by Canonical Markers res1") +
+p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell Sub-cluster by Canonical Markers res3") +
  theme_classic(base_size = 20) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
   coord_flip() +
@@ -158,6 +154,38 @@ p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.feat
 
 p1
 ```
+
+
+#Adding the Epithelial and Mesenchymal cells to the Immune cells subsetting dot plot
+```{r}
+#To add cell types to the dot plot of the subclusters of Immune-cells
+#need to add a new column in the d10xseurat.filt object to mark the cells that you wanna retrieve
+d10x.seurat@meta.data$id.cells = rownames(d10x.seurat@meta.data)
+d10x.seurat@meta.data$selected.cells = "No"
+d10x.seurat@meta.data$subcluster.name=NA
+
+id.cells.annot = rownames(Immune.cells.subclustering@meta.data)
+d10x.seurat@meta.data$selected.cells[match(id.cells.annot, d10x.seurat@meta.data$id.cells)] = "Yes"
+d10x.seurat@meta.data$subcluster.name[match(id.cells.annot, d10x.seurat@meta.data$id.cells)] = as.character(Immune.cells.subclustering@meta.data$seurat_clusters)
+table(d10x.seurat@meta.data$selected.cells)
+table(d10x.seurat@meta.data$subcluster.name)
+
+d10x.seurat@meta.data$selected.cells[d10x.seurat@meta.data$active.cluster %in% c("Epithelial cells", "Mesenchymal")] = "Yes"
+d10x.seurat@meta.data$selected.cells[d10x.seurat@meta.data$active.cluster == "Mesenchymal cells"] = "Yes"
+#to add subcluster name
+d10x.seurat@meta.data$subcluster.name[d10x.seurat@meta.data$active.cluster == "Epithelial cells"] = "Epithelial cells"
+d10x.seurat@meta.data$subcluster.name[d10x.seurat@meta.data$active.cluster == "Mesenchymal cells"] = "Mesenchymal cells"
+table(d10x.seurat@meta.data$selected.cells)
+table(d10x.seurat@meta.data$subcluster.name)
+#then subset the marked cells
+sc.selected = subset(d10x.seurat, subset = selected.cells == "Yes")
+
+DotPlot(sc.selected, group.by = "subcluster.name", assay = "RNA", features = selected.features) + labs(title = "Identifying Immune-cells subcluster by Canonical Markers res0.3") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, size = 8), axis.text.y = element_text(size = 8)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+```
+
 
 
 ```{r}
@@ -201,12 +229,12 @@ pheatmap(data.avg.exp.scaled,
 #remove non-Immune cell clusters
 ```{r}
 #Pull out True Immune cells.
-Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(11, 17, 18, 22:24, 26, 31:35, 37, 38, 40:42), invert = TRUE)
+Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(25, 36, 43, 47, 53, 58, 60, 68, 70, 75, 77:78, 88:91), invert = TRUE)
 
 Immune.Cells.True.subsetting <- Immune.Cells.True
 
 Immune.Cells.TrueV2 <- FindNeighbors(Immune.Cells.True.subsetting, dims = 1:20)
-Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 1)
+Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 0.3)
 Immune.Cells.TrueV2 <- RunUMAP(Immune.Cells.TrueV2, dims = 1:20)
 
 table(Immune.Cells.TrueV2@meta.data$seurat_clusters)
@@ -447,6 +475,9 @@ Endometriosis@meta.data %>%
 
 
 
+
+###SKIIP
+
 #NOt going to use below ananlysis so skip
 
 #lets see what happens if we pull out the B-cell clusters
@@ -625,4 +656,56 @@ p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
 
 p1
 ```
+######ignore above script
 
+
+
+
+#can continue from here on
+
+#want to get Immune proportion by high vs low in peritoneal endometriosis
+```{r}
+#proportions by LA tissue activity
+Endometriosis <- subset(d10x.seurat, subset = Class %in% "Peritoneal endometriosis")
+
+Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
+
+counts.prop = data.frame(table(Endometriosis@meta.data$Major_groups, Endometriosis@meta.data$Patient_LA_Status_Tissue_Level))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Major Groups", values = c("Immune cells" = "#d73027",
+                                                "Endothelial cells" = "#f46d43",
+                                                "EnEpi cells" = "#fdae61",
+                                                "Ens cells" = "#fee090",
+                                                "Epithelial cells" = "#e0f3f8",
+                                                "Erythrocytes" = "#abd9e9",
+                                                "Mesenchymal cells" = "#74add1",
+                                                "Smooth muscle cells" = "#4575b4")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1),
+        axis.text.y = element_text(angle = 0, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Immune cells in LA tissue activity') +
+  theme_classic(base_size = 20)
+
+p1
+
+
+Endometriosis@meta.data %>% 
+      group_by(Major_groups) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=8)
+```

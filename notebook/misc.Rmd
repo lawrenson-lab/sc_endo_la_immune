@@ -1,0 +1,84 @@
+---
+title: "Figure Undetermined"
+author: "Pak Yu"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(ggpubr)
+library(readr)
+```
+
+```{r}
+endo_cluster <- readRDS("data/fixed_annotated_aux.seurat.rds")@meta.data
+excel_path <- "data/Annotation tracker.xlsx"
+sheets <- readxl::excel_sheets(excel_path)
+Annotation_tracker <- sheets %>% 
+                      lapply(. , function(s){ read_excel(excel_path, sheet = s) %>% 
+                                              mutate(across(where(is.character),str_trim))
+                                              }) %>%
+                      setNames(sheets)
+
+```
+
+```{r}
+tbl <- endo_cluster %>%
+  dplyr::filter(Class =="Peritoneal endometriosis") %>%
+  separate( Number_of_lymphoid_aggregates ,c("LA1","LA2"),sep ="\\|") %>%
+  mutate(across(c(LA1,LA2),as.numeric),LA2=replace_na(LA2,0)) %>%
+  mutate(Number_of_lymphoid_aggregates = LA1+ LA2) %>%
+  #dplyr::filter( !is.na(Number_of_lymphoid_aggregates) ) %>%
+  group_by(Master_Assigned_Cell_Type,Number_of_lymphoid_aggregates) %>%
+  summarise(count=n()) %>%
+  mutate(prop= count/sum(count)*100)
+
+
+```
+
+```{r}
+  ggplot(tbl,aes(x=prop,y=Number_of_lymphoid_aggregates)) +
+    geom_point() + 
+    scale_x_log10() +
+  facet_wrap(~Master_Assigned_Cell_Type)
+```
+
+```{r}
+tbl <- endo_cluster %>%
+  dplyr::filter(Class =="Peritoneal endometriosis") %>%
+  separate( Number_of_lymphoid_aggregates ,c("LA1","LA2"),sep ="\\|") %>%
+  mutate(across(c(LA1,LA2),as.numeric),LA2=replace_na(LA2,0)) %>%
+  mutate(Number_of_lymphoid_aggregates = LA1+ LA2) %>%
+  #dplyr::filter( !is.na(Number_of_lymphoid_aggregates) ) %>%
+  group_by(Master_Assigned_Cell_Type,Number_of_lymphoid_aggregates,SampleName) %>%
+  summarise(count=n()) %>%
+  left_join(endo_cluster %>% count(SampleName,name="s"), by="SampleName") %>%
+  mutate( prop= count/s*100 ,
+          LA_detect=if_else(Number_of_lymphoid_aggregates>0,"Yes","No") ) 
+```
+
+```{r}
+ggplot(tbl,aes(x=prop,y=Number_of_lymphoid_aggregates)) +
+  geom_dotplot() +
+```
+
+```{r}
+  ggplot(tbl,aes(x=prop,y=Number_of_lymphoid_aggregates)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  stat_regline_equation(label.y = 35, aes(label = paste(after_stat(eq.label),after_stat(rr.label),sep = "~~~"))) +
+  stat_cor(aes(label=paste("Perason:",after_stat(r.label),after_stat(p.label),sep = "~")),p.accuracy = 0.01, r.accuracy = 0.01,label.y = 38) +
+  stat_cor(aes(label=paste("Spearman:",after_stat(r.label),after_stat(p.label),sep = "~")),p.accuracy = 0.01, r.accuracy = 0.01,cor.coef.name="rho",label.y = 40) +
+  scale_x_log10() +
+  theme_classic() +
+  facet_wrap(~Master_Assigned_Cell_Type, scales = "free_x")
+```
+
+```{r}
+
+```
+

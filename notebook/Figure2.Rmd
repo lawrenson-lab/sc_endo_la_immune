@@ -135,6 +135,7 @@ Immune.cells.subclustering@meta.data %>%
       print(n=92)
 ```
 
+
 ```{r}
 #Immune markers to identify immune cells
 Immune.markers = read.delim("data/Immune_Marker.csv", sep = ",")
@@ -153,6 +154,38 @@ p1 <-DotPlot(Immune.cells.subclustering, assay = "RNA", features = selected.feat
 
 p1
 ```
+
+
+#Adding the Epithelial and Mesenchymal cells to the Immune cells subsetting dot plot
+```{r}
+#To add cell types to the dot plot of the subclusters of Immune-cells
+#need to add a new column in the d10xseurat.filt object to mark the cells that you wanna retrieve
+d10x.seurat@meta.data$id.cells = rownames(d10x.seurat@meta.data)
+d10x.seurat@meta.data$selected.cells = "No"
+d10x.seurat@meta.data$subcluster.name=NA
+
+id.cells.annot = rownames(Immune.cells.subclustering@meta.data)
+d10x.seurat@meta.data$selected.cells[match(id.cells.annot, d10x.seurat@meta.data$id.cells)] = "Yes"
+d10x.seurat@meta.data$subcluster.name[match(id.cells.annot, d10x.seurat@meta.data$id.cells)] = as.character(Immune.cells.subclustering@meta.data$seurat_clusters)
+table(d10x.seurat@meta.data$selected.cells)
+table(d10x.seurat@meta.data$subcluster.name)
+
+d10x.seurat@meta.data$selected.cells[d10x.seurat@meta.data$active.cluster %in% c("Epithelial cells", "Mesenchymal")] = "Yes"
+d10x.seurat@meta.data$selected.cells[d10x.seurat@meta.data$active.cluster == "Mesenchymal cells"] = "Yes"
+#to add subcluster name
+d10x.seurat@meta.data$subcluster.name[d10x.seurat@meta.data$active.cluster == "Epithelial cells"] = "Epithelial cells"
+d10x.seurat@meta.data$subcluster.name[d10x.seurat@meta.data$active.cluster == "Mesenchymal cells"] = "Mesenchymal cells"
+table(d10x.seurat@meta.data$selected.cells)
+table(d10x.seurat@meta.data$subcluster.name)
+#then subset the marked cells
+sc.selected = subset(d10x.seurat, subset = selected.cells == "Yes")
+
+DotPlot(sc.selected, group.by = "subcluster.name", assay = "RNA", features = selected.features) + labs(title = "Identifying Immune-cells subcluster by Canonical Markers res0.3") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, size = 8), axis.text.y = element_text(size = 8)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+```
+
 
 
 ```{r}
@@ -196,7 +229,7 @@ pheatmap(data.avg.exp.scaled,
 #remove non-Immune cell clusters
 ```{r}
 #Pull out True Immune cells.
-Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(8, 12, 21, 23, 25, 36, 41, 43, 47, 53, 57:58, 60, 66, 68, 70, 75, 77:78, 81:82, 85, 87:91), invert = TRUE)
+Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(25, 36, 43, 47, 53, 58, 60, 68, 70, 75, 77:78, 88:91), invert = TRUE)
 
 Immune.Cells.True.subsetting <- Immune.Cells.True
 

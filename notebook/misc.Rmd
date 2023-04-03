@@ -63,7 +63,7 @@ tbl <- endo_cluster %>%
 
 ```{r}
 ggplot(tbl,aes(x=prop,y=Number_of_lymphoid_aggregates)) +
-  geom_dotplot() +
+  geom_dotplot() 
 ```
 
 ```{r}

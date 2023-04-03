@@ -100,6 +100,9 @@ p1
 #pdf(file = "Plots/Endometriosis_LA_Immune/Original Cell Clusters.pdf", width = 15, height = 15) 
 #p1
 #dev.off()
+
+FeaturePlot(d10x.seurat, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM")) +
+  theme_classic(base_size = 20)
 ```
 
 
@@ -125,6 +128,8 @@ p1 <- DimPlot(Immune.cells.subclustering, reduction = "umap", label =  TRUE, ras
 
 p1
 
+FeaturePlot(Immune.cells.subclustering, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM")) +
+  theme_classic(base_size = 20)
 
 #removing levels that are empty (only keeping the values in the vectors I want) and getting the numb tisseue, n_patient, and n_cells
 Immune.cells.subclustering@meta.data <- droplevels(Immune.cells.subclustering@meta.data)
@@ -229,12 +234,12 @@ pheatmap(data.avg.exp.scaled,
 #remove non-Immune cell clusters
 ```{r}
 #Pull out True Immune cells.
-Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(25, 36, 43, 47, 53, 58, 60, 68, 70, 75, 77:78, 88:91), invert = TRUE)
+Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(8, 12, 21, 23, 25, 36, 41, 43, 47, 53, 57:58, 60, 66, 68, 70, 75, 77:78, 81:82, 85, 87:91), invert = TRUE)
 
 Immune.Cells.True.subsetting <- Immune.Cells.True
 
 Immune.Cells.TrueV2 <- FindNeighbors(Immune.Cells.True.subsetting, dims = 1:20)
-Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 0.3)
+Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 1)
 Immune.Cells.TrueV2 <- RunUMAP(Immune.Cells.TrueV2, dims = 1:20)
 
 table(Immune.Cells.TrueV2@meta.data$seurat_clusters)

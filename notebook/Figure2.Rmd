@@ -239,8 +239,7 @@ Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters
 Immune.Cells.True.subsetting <- Immune.Cells.True
 
 Immune.Cells.TrueV2 <- FindNeighbors(Immune.Cells.True.subsetting, dims = 1:20)
-Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 1)
-Immune.Cells.TrueV2 <- RunUMAP(Immune.Cells.TrueV2, dims = 1:20)
+Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 0.9)
 
 table(Immune.Cells.TrueV2@meta.data$seurat_clusters)
 
@@ -248,7 +247,7 @@ clustree(Immune.Cells.TrueV2)
 
 p1 <- DimPlot(Immune.Cells.TrueV2, reduction = "umap", label =  TRUE, raster = FALSE) + 
   theme_classic(base_size = 20) +
-  ggtitle('UMAP of Immune cells TrueV2 subclusters Res 1')
+  ggtitle('UMAP of Immune cells TrueV2 subclusters Res 0.9')
 
 p1
 
@@ -258,9 +257,9 @@ Immune.Cells.TrueV2@meta.data <- droplevels(Immune.Cells.TrueV2@meta.data)
 Immune.Cells.TrueV2@meta.data %>% 
       group_by(seurat_clusters %>% as.character()) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
-      print(n=35)
+      print(n=29)
 
-p1 <-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell TrueV2 Sub-cluster by Canonical Markers res1") +
+p1 <-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell TrueV2 Sub-cluster by Canonical Markers res0.9") +
  theme_classic(base_size = 20) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
   coord_flip() +
@@ -361,7 +360,7 @@ ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
         axis.title.x = element_blank(),
         axis.title.y = element_blank(),
         legend.position = "none") +
-  ggtitle('Proportion of Immune cells TrueV2 by patient res0.4')
+  ggtitle('Proportion of Immune cells TrueV2 by patient res0.7')
 ```
 
 ```{r}
@@ -392,7 +391,7 @@ p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
         axis.text.y = element_text(angle = 0, hjust = 1),
         axis.title.x = element_blank(),
         axis.title.y = element_blank()) +
-  ggtitle('Proportion of Immune cells TrueV2 res0.4 in LA Status') +
+  ggtitle('Proportion of Immune cells TrueV2 res0.47 in LA Status') +
   theme_classic(base_size = 20)
 
 p1

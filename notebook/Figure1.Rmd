@@ -66,7 +66,7 @@ Follow the below steps for PCA analysis
 4. If the label on plot is too crowded. consider using `Patient.No.`
 
 ```{r}
-endo_cluster <- readRDS("data/fixed_annotated_aux.seurat.rds")@meta.data
+d10x.seurat <- readRDS("data/fixed_annotated_aux.seurat.rds")@meta.data
 excel_path <- "data/Annotation tracker.xlsx"
 sheets <- readxl::excel_sheets(excel_path)
 Annotation_tracker <- sheets %>% 
@@ -80,7 +80,7 @@ Annotation_tracker$Epi_Data
 
 
 ```{r}
-immue_endo_t<- endo_cluster%>%
+immue_endo_t<- d10x.seurat@meta.data%>%
                   #filter(Tissue_LA_Activity == "Yes") %>%
                   #filter(Master_Assigned_Cell_Type) %>%
                   #filter(! is.na(Number_of_lymphoid_aggregates)) %>%
@@ -88,7 +88,7 @@ immue_endo_t<- endo_cluster%>%
                   summarise(count=n()) %>%
                   mutate(prop= count/sum(count)*100)
 
-anno_df <- endo_cluster  %>%
+anno_df <- d10x.seurat@meta.data  %>%
            left_join(Annotation_tracker$Epi_Data, by=c("Patient.No."="Patient_ID")) %>%
            dplyr::filter(LA_Status != "Exclude")  %>% 
            distinct(Patient.No.,LA_Status,SampleName) %>%

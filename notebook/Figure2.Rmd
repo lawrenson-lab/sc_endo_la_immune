@@ -262,6 +262,16 @@ Immune.Cells.TrueV2@meta.data %>%
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
       print(n=29)
 
+
+#Immune markers to identify immune cells
+Immune.markers = read.delim("data/Tcell_NKTcells_NKcells_Immune_Markers.csv", sep = ",")
+head(Immune.markers)
+
+#selected.features = unique(c(as.character(unique(Immune.markers$Positive)), as.character(unique(Immune.markers$Negative))))
+selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
+
+
+
 p1 <-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell TrueV2 Sub-cluster by Canonical Markers res0.6") +
  theme_classic(base_size = 20) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +

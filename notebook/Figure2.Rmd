@@ -493,53 +493,6 @@ Endometriosis@meta.data %>%
 
 
 
-#want to get Immune proportion by high vs low in peritoneal endometriosis
-```{r}
-#proportions by LA tissue activity
-Endometriosis <- subset(d10x.seurat, subset = Class %in% "Peritoneal endometriosis")
-
-Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
-
-counts.prop = data.frame(table(Endometriosis@meta.data$Major_groups, Endometriosis@meta.data$Patient_LA_Status_Tissue_Level))
-counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
-head(counts.prop.perc)
-aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
-aux$Var2 = "Total"
-colnames(aux) <- c("Var1", "Freq", "Var2")
-aux$percent = aux$Freq / sum(aux$Freq)
-counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
-
-bsize = 20
-p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
-  geom_bar(position="stack",stat = "identity", width=0.8) +
-  scale_fill_manual(name="Major Groups", values = c("Immune cells" = "#d73027",
-                                                "Endothelial cells" = "#f46d43",
-                                                "EnEpi cells" = "#fdae61",
-                                                "Ens cells" = "#fee090",
-                                                "Epithelial cells" = "#e0f3f8",
-                                                "Erythrocytes" = "#abd9e9",
-                                                "Mesenchymal cells" = "#74add1",
-                                                "Smooth muscle cells" = "#4575b4")) +
-  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
-  coord_flip() +
-  theme_set(theme_classic(base_size = 30)) +
-  theme(plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 270, hjust = 1),
-        axis.text.y = element_text(angle = 0, hjust = 1),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank()) +
-  ggtitle('Proportion of Immune cells in LA tissue activity') +
-  theme_classic(base_size = 20)
-
-p1
-
-
-Endometriosis@meta.data %>% 
-      group_by(Major_groups) %>% 
-     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
-      print(n=8)
-```
-
 
 
 ## Fig 2D
@@ -603,3 +556,33 @@ inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
 
 
 ```
+
+#Sanky plot to compare resolution of 0.4 to resolution of 0.6
+```{r}
+#Sankey
+data = as.data.frame.matrix(table(Immune.Cells.TrueV2@meta.data, B.cells.subclustering@meta.data$seurat_clusters))
+data
+library(networkD3)
+library(dplyr)
+library(tidyverse)
+# I need a long format
+data.long.class <- data %>%
+  rownames_to_column %>%
+  gather(key = 'key', value = 'value', -rowname) %>%
+  filter(value > 0)
+colnames(data.long.class) <- c("source", "target", "value")
+data.long.class$target <- paste(data.long.class$target, " ", sep="")
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(name=c(as.character(data.long.class$source), as.character(data.long.class$target)) %>% unique())
+# With networkD3, cnodes <- data.frame(name=c(as.character(data.long.class$source), as.character(data.long.class$target)) %>% unique())
+#onnection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+data.long.class$IDsource=match(data.long.class$source, nodes$name)-1
+data.long.class$IDtarget=match(data.long.class$target, nodes$name)-1
+# prepare colour scale
+ColourScal ='d3.scaleOrdinal() .range(["#FDE725FF","#B4DE2CFF","#6DCD59FF","#35B779FF","#1F9E89FF","#26828EFF","#31688EFF","#3E4A89FF","#482878FF","#440154FF"])'
+sankeyNetwork(Links = data.long.class, Nodes = nodes,
+              Source = "IDsource", Target = "IDtarget",
+              Value = "value", NodeID = "name",
+              sinksRight=T, colourScale=ColourScal, nodeWidth=40, fontSize=20, nodePadding=20)
+```
+

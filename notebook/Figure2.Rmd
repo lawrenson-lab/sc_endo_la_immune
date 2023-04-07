@@ -557,10 +557,99 @@ inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
 
 ```
 
-#Sanky plot to compare resolution of 0.4 to resolution of 0.6
+#Sanky plot to compare resolution of 0.4 from previous analysis when pulling out Immune cells in LA group to resolution of 0.6 in current analysis
+
+```{r}
+
+patient_la_anno <- read_csv("data/endo_LA_Summary.csv",col_types = cols(patient_id = col_integer()))
+
+Immune.Cells@meta.data <- Immune.Cells@meta.data  %>%
+              rownames_to_column() %>%
+              left_join(patient_la_anno %>% mutate(patient_id = as.integer(patient_id)), by=c("Patient.No."="patient_id")) %>%
+  column_to_rownames()
+
+
+#Pull out Immune cells from LA groups in tissue samples
+Immune.Cells.LA <- subset(Immune.Cells, subset = immune_activity %in% c("High", "Low"))
+
+p1 <- DimPlot(Immune.Cells.LA, pt.size = 0.1, group.by = "Master_Assigned_Cell_Type", label = T, raster=FALSE) +
+  theme_classic(base_size = 20)
+
+p1
+
+pdf(file = "Plots/Endometriosis_LA_Immune/Immune Cell Clusters in LA Tissue Group.pdf", width = 15, height = 10) 
+p1
+dev.off()
+
+
+
+#removing levels that are empty (only keeping the values in the vectors I want) and getting the numb tisseue, n_patient, and n_cells
+Immune.Cells.LA@meta.data <- droplevels(Immune.Cells.LA@meta.data)
+
+Immune.Cells.LA@meta.data %>% 
+     group_by(Master_Assigned_Cell_Type) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n())
+
+
+```
+
+
+```{r}
+##Subclustering just the Immune cells from LA high low
+Immune.cells.subclustering.res0.3 <- FindNeighbors(Immune.Cells.LA, dims = 1:20)
+Immune.cells.subclustering.res0.3 <- FindClusters(Immune.cells.subclustering.res0.3, resolution = 0.3)
+Immune.cells.subclustering.res0.3 <- RunUMAP(Immune.cells.subclustering.res0.3, dims = 1:20)
+
+p1 <- DimPlot(Immune.cells.subclustering.res0.3, reduction = "umap", label =  TRUE) + 
+  theme_classic(base_size = 20) +
+  ggtitle('UMAP of LA tissue group Immune cells subclusters Res 0.3')
+
+p1
+
+p1 <-DotPlot(Immune.cells.subclustering.res0.3, assay = "RNA", features = selected.features) + labs(title = "Identifying LA tisue groups Immune cell Sub-cluster by Canonical Markers res0.3") +
+ theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+p1
+
+```
+
+
+```{r}
+#Pull out True Immune cells.
+Immune.Cells.True.res0.3 <- subset(Immune.cells.subclustering.res0.3, subset = seurat_clusters %in% c(5, 11, 12, 13, 17), invert = TRUE)
+
+Immune.Cells.True.subsetting.LAgroup <- Immune.Cells.True.res0.3
+
+Immune.Cells.TrueV2.LAgroup <- FindNeighbors(Immune.Cells.True.subsetting.LAgroup, dims = 1:20)
+Immune.Cells.TrueV2.LAgroup <- FindClusters(Immune.Cells.TrueV2.LAgroup, resolution = 0.4)
+Immune.Cells.TrueV2.LAgroup <- RunUMAP(Immune.Cells.TrueV2.LAgroup, dims = 1:20)
+
+table(Immune.Cells.TrueV2.LAgroup@meta.data$seurat_clusters)
+
+
+p1 <- DimPlot(Immune.Cells.TrueV2.LAgroup, reduction = "umap", label =  TRUE) + 
+  theme_classic(base_size = 20) +
+  ggtitle('UMAP of only True LA Tissue Group Immune cells subclusters Res0.4')
+
+p1
+
+p1 <- DotPlot(Immune.Cells.TrueV2.LAgroup, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell cluster by Canonical Markers res2") +
+  theme_classic(base_size = 20) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, size = 8), axis.text.y = element_text(size = 8)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+p1
+```
+
+
+
 ```{r}
 #Sankey
-data = as.data.frame.matrix(table(Immune.Cells.TrueV2@meta.data, B.cells.subclustering@meta.data$seurat_clusters))
+data = as.data.frame.matrix(table(Immune.Cells.TrueV2.LAgroup@meta.data$seurat_clusters, Immune.Cells.TrueV2@meta.data$seurat_clusters))
 data
 library(networkD3)
 library(dplyr)

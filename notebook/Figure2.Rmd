@@ -36,6 +36,7 @@ library(readxl)
 library(ggrepel)
 library(clustree)
 library(pheatmap)
+library(sankeyNetwork)
 ```
 
 
@@ -452,6 +453,7 @@ p1
 ```{r}
 Endometriosis <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal endometriosis")
 
+
 #proportions by LA tissue activity
 Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
 
@@ -532,7 +534,7 @@ immue_endo_t<- Endometriosis@meta.data %>%
 anno_df <- Endometriosis@meta.data  %>%
            left_join(Annotation_tracker$Epi_Data, by=c("Patient.No."="Patient_ID")) %>%
            #dplyr::filter(LA_Status != "Exclude")  %>% 
-           distinct(Patient.No.,LA_Status,SampleName) %>%
+           distinct(Patient.No.,Tissue_LA_Activity,SampleName) %>%
            column_to_rownames("SampleName")
 
 heatmap_df <- immue_endo_t  %>% 
@@ -548,7 +550,7 @@ t %>%
 prcomp(scale = TRUE) %>%
 augment(.) %>%
 inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
-  ggplot(aes(x=.fittedPC1, y=.fittedPC2,color=LA_Status,label=Patient.No.))+
+  ggplot(aes(x=.fittedPC1, y=.fittedPC2,color=Tissue_LA_Activity,label=Patient.No.))+
   geom_point(size=5) +
   geom_text(nudge_x = 0.2, nudge_y = 0.2,angle=20,size=3) +
   labs(x="PC1",y="PC2") + 
@@ -643,13 +645,33 @@ p1 <- DotPlot(Immune.Cells.TrueV2.LAgroup, assay = "RNA", features = selected.fe
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 p1
+
+Endometriosis.LAgroup <- subset(Immune.Cells.TrueV2.LAgroup, subset = Class %in% "Peritoneal endometriosis")
+
+Endometriosis.LAgroup@meta.data %>% 
+      group_by(seurat_clusters %>% as.character()) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=18)
+
 ```
 
 
 
 ```{r}
 #Sankey
-data = as.data.frame.matrix(table(Immune.Cells.TrueV2.LAgroup@meta.data$seurat_clusters, Immune.Cells.TrueV2@meta.data$seurat_clusters))
+Endometriosis.LAgroup@meta.data %>%
+rownames_to_column(var = "cell") %>%
+dplyr::select(cell,seurat_clusters) %>%
+inner_join( Endometriosis@meta.data %>%
+            rownames_to_column(var = "cell") %>% 
+            dplyr::select(cell,seurat_clusters)
+            , by = "cell") %>%
+  group_by( seurat_clusters.x, seurat_clusters.y)%>%
+  summarise(n=n())%>%
+  spread(seurat_clusters.y, seurat_clusters.x) 
+#View
+  
+data = as.data.frame.matrix(table(Endometriosis.LAgroup@meta.data$seurat_clusters, Endometriosis@meta.data$seurat_clusters))
 data
 library(networkD3)
 library(dplyr)

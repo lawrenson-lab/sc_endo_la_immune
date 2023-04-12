@@ -565,9 +565,10 @@ prcomp(scale = TRUE)
 
 ## Variance Explain in each PC
 
-pc %>%
- tidy("pcs") %>%
-  ggplot(aes(x=PC,y=percent*100)) +
+pc_percent_explain <- pc %>%
+                      tidy("pcs") 
+
+  ggplot(pc_percent_explain,aes(x=PC,y=percent*100)) +
     geom_bar(stat="identity") +
     labs(y="Percent Variance Explained") +
     theme_classic()
@@ -575,14 +576,20 @@ pc %>%
 # A tricky one to show - how much each clusters contribute to each PC (only show largest contributors)
 var_explain <- varimax(pc$rotation)
 
+pc_x <- "1"
+pc_y <- "2"
+pc_per_x <- pc_percent_explain %>% filter(PC==pc_x) %>% dplyr::select(percent) %>% unlist *100
+pc_per_y <- pc_percent_explain %>% filter(PC==pc_y) %>% dplyr::select(percent) %>% unlist *100
+x_var <- paste(".fittedPC",pc_x,sep="")
+y_var <- paste(".fittedPC",pc_y,sep="")
 
 pc %>%
 augment(.) %>%
 inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
-  ggplot(aes(x=.fittedPC4, y=.fittedPC5,color=LA_Status,label=Patient.No.))+
+  ggplot(aes(x=get(x_var), y=get(y_var),color=LA_Status,label=Patient.No.))+
   geom_point(size=5) +
   geom_text(nudge_x = 0.2, nudge_y = 0.2,angle=20,size=3) +
-  labs(x="PC4",y="PC5") + 
+  labs(x=paste("PC",pc_x," ",pc_per_x,"%",sep=""),y=paste("PC",pc_y," ",pc_per_y,"%",sep = "")) + 
   theme_half_open(12) 
 
 

@@ -689,6 +689,8 @@ Endometriosis.LAgroup@meta.data %>%
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
       print(n=18)
 
+write_csv(Endometriosis.LAgroup@meta.data,"data/Endometriosis.LAgroup.meta.data.csv")
+
 ```
 
 

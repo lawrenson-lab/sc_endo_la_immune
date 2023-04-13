@@ -675,7 +675,7 @@ p1 <- DimPlot(Immune.Cells.TrueV2.LAgroup, reduction = "umap", label =  TRUE) +
 
 p1
 
-p1 <- DotPlot(Immune.Cells.TrueV2.LAgroup, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell cluster by Canonical Markers res2") +
+p1 <- DotPlot(Immune.Cells.TrueV2.LAgroup, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell cluster by Canonical Markers res0.4") +
   theme_classic(base_size = 20) + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, size = 8), axis.text.y = element_text(size = 8)) +
   coord_flip() +
@@ -684,6 +684,14 @@ p1 <- DotPlot(Immune.Cells.TrueV2.LAgroup, assay = "RNA", features = selected.fe
 p1
 
 Endometriosis.LAgroup <- subset(Immune.Cells.TrueV2.LAgroup, subset = Class %in% "Peritoneal endometriosis")
+
+p1 <- DotPlot(Endometriosis.LAgroup, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell cluster by Canonical Markers res2") +
+  theme_classic(base_size = 20) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, size = 8), axis.text.y = element_text(size = 8)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+p1
 
 Endometriosis.LAgroup@meta.data %>% 
       group_by(seurat_clusters %>% as.character()) %>% 

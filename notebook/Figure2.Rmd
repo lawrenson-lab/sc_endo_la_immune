@@ -698,7 +698,7 @@ write_csv(Endometriosis.LAgroup@meta.data,"data/Endometriosis.LAgroup.meta.data.
 
 ```{r}
 #Sankey
-Endometriosis.LAgroup@meta.data %>%
+data.long.class <- Endometriosis.LAgroup@meta.data %>%
 rownames_to_column(var = "cell") %>%
 dplyr::select(cell,seurat_clusters) %>%
 inner_join( Endometriosis@meta.data %>%
@@ -706,22 +706,23 @@ inner_join( Endometriosis@meta.data %>%
             dplyr::select(cell,seurat_clusters)
             , by = "cell") %>%
   group_by( seurat_clusters.x, seurat_clusters.y)%>%
-  summarise(n=n())%>%
-  spread(seurat_clusters.y, seurat_clusters.x) 
+  summarise(value=n(),.groups = 'drop')%>%
+  rename( target=seurat_clusters.x,source=seurat_clusters.y) %>%
+  mutate(target=paste("c",target,sep=""),source=paste("C",source,sep=""))
 #View
   
-data = as.data.frame.matrix(table(Endometriosis.LAgroup@meta.data$seurat_clusters, Endometriosis@meta.data$seurat_clusters))
-data
+#data = as.data.frame.matrix(table(Endometriosis.LAgroup@meta.data$seurat_clusters, Endometriosis@meta.data$seurat_clusters))
+#data
 library(networkD3)
 library(dplyr)
 library(tidyverse)
 # I need a long format
-data.long.class <- data %>%
-  rownames_to_column %>%
-  gather(key = 'key', value = 'value', -rowname) %>%
-  filter(value > 0)
-colnames(data.long.class) <- c("source", "target", "value")
-data.long.class$target <- paste(data.long.class$target, " ", sep="")
+# data.long.class <- data %>%
+#   rownames_to_column %>%
+#   gather(key = 'key', value = 'value', -rowname) %>%
+#   filter(value > 0)
+# colnames(data.long.class) <- c("source", "target", "value")
+# data.long.class$target <- paste(data.long.class$target, " ", sep="")
 # From these flows we need to create a node data frame: it lists every entities involved in the flow
 nodes <- data.frame(name=c(as.character(data.long.class$source), as.character(data.long.class$target)) %>% unique())
 # With networkD3, cnodes <- data.frame(name=c(as.character(data.long.class$source), as.character(data.long.class$target)) %>% unique())

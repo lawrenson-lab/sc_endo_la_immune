@@ -265,7 +265,7 @@ Immune.Cells.TrueV2@meta.data %>%
 
 
 #Immune markers to identify immune cells
-Immune.markers = read.delim("data/Tcell_NKTcells_NKcells_Immune_Markers.csv", sep = ",")
+Immune.markers = read.delim("data/Myeloid_Cells_Markers.csv", sep = ",")
 head(Immune.markers)
 
 #selected.features = unique(c(as.character(unique(Immune.markers$Positive)), as.character(unique(Immune.markers$Negative))))
@@ -273,7 +273,7 @@ selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
 
 
 
-p1 <-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = selected.features) + labs(title = "Identifying Immune cell TrueV2 Sub-cluster by Canonical Markers res0.6") +
+p1 <-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = selected.features) + labs(title = "Identifying Myeloid Immune cell TrueV2 Sub-cluster by Canonical Markers res0.6") +
  theme_classic(base_size = 20) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
   coord_flip() +
@@ -668,6 +668,10 @@ Immune.Cells.TrueV2.LAgroup <- RunUMAP(Immune.Cells.TrueV2.LAgroup, dims = 1:20)
 
 table(Immune.Cells.TrueV2.LAgroup@meta.data$seurat_clusters)
 
+Immune.Cells.TrueV2.LAgroup@meta.data %>% 
+      group_by(seurat_clusters %>% as.character()) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=18)
 
 p1 <- DimPlot(Immune.Cells.TrueV2.LAgroup, reduction = "umap", label =  TRUE) + 
   theme_classic(base_size = 20) +

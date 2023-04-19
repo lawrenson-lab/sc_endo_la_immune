@@ -293,6 +293,11 @@ Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data  %>%
                              seurat_clusters == 19 ~ "Mast cells",
                              seurat_clusters == 13 ~ "B cells",
                              seurat_clusters %in% c(17,18) ~ "Plasma cells"))
+p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Parent_immune_cluster", label = T, raster=FALSE) +
+  theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
+
+p1
+
 ```
 
 
@@ -548,7 +553,7 @@ anno_df <- Endometriosis@meta.data  %>%
            dplyr::select(-rowname) %>%
            #left_join(Annotation_tracker$Epi_Data, by=c("Patient.No."="Patient_ID")) %>%
            #dplyr::filter(LA_Status != "Exclude")  %>% 
-           distinct(Patient.No.,LA_Status,SampleName) %>%
+           distinct(Patient.No.,Tissue_LA_Activity,SampleName) %>%
            column_to_rownames("SampleName")
 
 heatmap_df <- immue_endo_t  %>% 
@@ -572,7 +577,7 @@ pc_percent_explain <- pc %>%
   ggplot(pc_percent_explain,aes(x=PC,y=percent*100)) +
     geom_bar(stat="identity") +
     labs(y="Percent Variance Explained") +
-    theme_classic()
+    theme_classic(base_size = 30)
 
 # A tricky one to show - how much each clusters contribute to each PC (only show largest contributors)
 var_explain <- varimax(pc$rotation)
@@ -587,11 +592,12 @@ y_var <- paste(".fittedPC",pc_y,sep="")
 pc %>%
 augment(.) %>%
 inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
-  ggplot(aes(x=get(x_var), y=get(y_var),color=LA_Status,label=Patient.No.))+
-  geom_point(size=5) +
-  geom_text(nudge_x = 0.2, nudge_y = 0.2,angle=20,size=3) +
+  ggplot(aes(x=get(x_var), y=get(y_var),color=Tissue_LA_Activity,label=Patient.No.))+
+  geom_point(size=7) +
+  geom_text(nudge_x = 0.15, nudge_y = 0.15,angle=20,size=5) +
   labs(x=paste("PC",pc_x," ",pc_per_x,"%",sep=""),y=paste("PC",pc_y," ",pc_per_y,"%",sep = "")) + 
-  theme_half_open(12) 
+  theme_half_open(12) +
+  theme_classic(base_size = 30)
 
 
 ```

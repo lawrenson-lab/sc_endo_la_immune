@@ -49,10 +49,94 @@ setwd("/home/harom/Code/sc_endo_la_immune")
 #endometrioma vs Endometriosis LA by block
 LA.extended.data = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 4)
 
-p1 <- beeswarm(Number_of_lymphoid_aggregates ~ Category, data=LA.extended.data, col=c("Endometrioma" = "#7b3294", "Endometriosis" = "#d9f0d3"), pch=19, method="swarm") 
+#endometrioma vs Endometriosis LA by blocks stats
+Endometrioma <- c(0,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,1,0,0,0,0,0,0,0)
+Endometriossis<- c(0,0,0,0,2,0,0,2,3,0,4,8,10,7,7,9,0,0,1,1,11,0,5,0,0,0,0,0,0,0,0,2,2,3,4,0,0,1,5,0,13,1,3,4,0,2,0,1,5,2,1,1,0,1,1,1,1,1,0,1,1,0,0,1,3,0,0,0,0,0,0,0,0) 
+
+t_test <- t.test(Endometrioma, Endometriossis)
+t_test
+
+p1 <- ggplot(LA.extended.data, aes(x=Category, y=Number_of_lymphoid_aggregates, color=Category)) + 
+  scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+                                                    "Endometriosis" = "#d9f0d3")) + 
+  geom_beeswarm(size=2.5) + 
+  geom_text(x=1, y=12, label=paste0("p-value = ", t_test$p.value), colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in each Endometrioma and Endometriosis Block") + 
+  theme_classic(base_size = 20)
+
+p1
+
+
+#endometrioma vs Endometriosis LA by part
+LA.simple.data = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 5)
+
+#endometrioma vs Endometriosis LA by part stats
+Endometrioma <- c(6,0,0,0,0,6,0,0)
+Endometriossis<- c(0,0,4,3,0,12,0,17,16,0,16,2,0,0,0,0,0,0,0,0,0,0,4,7,0,0,1,5,0,6,14,3,4,0,10,3,4,2,4,0,0,0,0,0,0) 
+
+wil_test <- wilcox.test(Endometrioma, Endometriossis)
+
+p1 <- ggplot(LA.simple.data, aes(x=Category, y=Number_of_lymphoid_aggregates, color=Category)) + 
+  scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+                                                    "Endometriosis" = "#d9f0d3")) + 
+  geom_beeswarm(size=2.5) + 
+  geom_text(x=1, y=15, label="p-value = 0.4654", colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in each Endometrioma and Endometriosis part") + 
+  theme_classic(base_size = 20)
 
 p1
 ```
+
+## Fig 1C
+```{r}
+#Heatmap of peritoneal endometriosis lesions in parts
+library(pheatmap)
+
+la_summary = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 2)
+la_summary[is.na(la_summary)] = -10
+
+my_cluster_col = as.data.frame(la_summary[3])
+my_cluster_col$Patient = as.character(my_cluster_col$Patient)
+rownames(my_cluster_col) <- paste0("row_", seq(nrow(my_cluster_col)))
+la_summary = la_summary[c(-8:-9, -14:-41),c(-1:-3, -11:-31)]  #need to adjust rows depending on the samples being included.
+
+test_labels <- as.matrix(la_summary)
+rownames(la_summary) <- paste0("row_", seq(nrow(la_summary)))
+test_labels[test_labels < 0] <- "\u2217\u2217"
+test_labels[test_labels < 0] <- "\uFF0A"
+
+p1 <- pheatmap(la_summary,
+         cluster_cols = F,
+         display_numbers = test_labels,
+         fontsize_number=12,
+         cellheight=20,
+         annotation_row = my_cluster_col,
+         clustering_distance_row = "euclidean",
+         main = "11 samples euclidean")
+
+p1
+
+
+#or plot based on Beeswarm plot
+LA.simple.data = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 5)
+LA.simple.data.sel = LA.simple.data[c(-1,-2,-3, -5, -10, -23, -33, -36, -47), c("LA_Activity", "Category", "Number_of_lymphoid_aggregates")]
+
+p1 <- ggplot(LA.simple.data.sel, aes(x=LA_Activity, y=Number_of_lymphoid_aggregates, color=LA_Activity)) + 
+  #scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+   #                                                 "Endometriosis" = "#d9f0d3")) + 
+  geom_beeswarm(size=2.5) + 
+  #geom_text(x=1, y=15, label="p-value = 0.4654", colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in patients defined as High and low by part") + 
+  theme_classic(base_size = 30)
+  
+
+p1
+
+```
+
+
+
+
 
 
 ## Fig 1F

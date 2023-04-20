@@ -281,6 +281,9 @@ p1 <-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = selected.features) +
 
 
 p1
+
+
+write_csv(Immune.Cells.TrueV2@meta.data,"data/Immune_Cells_TrueV2_metadata.csv")
 ```
 
 #combining clusters into their immune families
@@ -293,6 +296,7 @@ Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data  %>%
                              seurat_clusters == 19 ~ "Mast cells",
                              seurat_clusters == 13 ~ "B cells",
                              seurat_clusters %in% c(17,18) ~ "Plasma cells"))
+
 p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Parent_immune_cluster", label = T, raster=FALSE) +
   theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
 
@@ -508,6 +512,12 @@ Endometriosis@meta.data %>%
       print(n=18)
 
 write_csv(Endometriosis@meta.data,"data/Endometriosis.meta.data.csv")
+
+p1 <- DimPlot(object = Endometriosis, pt.size = 0.1,split.by = "LA_Status", group.by ="Parent_immune_cluster", label = T, raster=FALSE) +
+  theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
+
+p1
+
 ```
 
 

@@ -1,0 +1,254 @@
+---
+title: "WCE2023 presentation figures"
+author: "Marcela Haro"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Library loading
+```{r ,message = FALSE}
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(broom)
+library(readxl)
+library(ggplot2)
+library(gdata)
+library(ggbeeswarm)
+library(beeswarm)
+```
+
+
+
+#LAs in Endometrioma and Endometriosis
+```{r}
+#endometrioma vs Endometriosis LA by block
+LA.extended.data = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 4)
+
+#endometrioma vs Endometriosis LA by blocks stats
+Endometrioma <- c(0,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,1,0,0,0,0,0,0,0)
+Endometriossis<- c(0,0,0,0,2,0,0,2,3,0,4,8,10,7,7,9,0,0,1,1,11,0,5,0,0,0,0,0,0,0,0,2,2,3,4,0,0,1,5,0,13,1,3,4,0,2,0,1,5,2,1,1,0,1,1,1,1,1,0,1,1,0,0,1,3,0,0,0,0,0,0,0,0) 
+
+t_test <- t.test(Endometrioma, Endometriossis)
+t_test
+
+p1 <- ggplot(LA.extended.data, aes(x=Category, y=Number_of_lymphoid_aggregates, color=Category)) + 
+  scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+                                                    "Endometriosis" = "#d9f0d3")) + 
+  geom_beeswarm(size=2.5) + 
+  geom_text(x=1, y=12, label=paste0("p-value = ", t_test$p.value), colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in each Endometrioma and Endometriosis Block") + 
+  theme_classic(base_size = 20)
+
+p1
+
+```
+
+
+#Patients are either LAhigh or LAlow
+```{r}
+#Heatmap of peritoneal endometriosis lesions in parts
+library(pheatmap)
+
+la_summary = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 2)
+la_summary[is.na(la_summary)] = -10
+
+my_cluster_col = as.data.frame(la_summary[3])
+my_cluster_col$Patient = as.character(my_cluster_col$Patient)
+rownames(my_cluster_col) <- paste0("row_", seq(nrow(my_cluster_col)))
+la_summary = la_summary[c(-8, -14:-41),c(-1:-3, -11:-31)]  #need to adjust rows depending on the samples being included.
+
+test_labels <- as.matrix(la_summary)
+rownames(la_summary) <- paste0("row_", seq(nrow(la_summary)))
+test_labels[test_labels < 0] <- "\u2217\u2217"
+test_labels[test_labels < 0] <- "\uFF0A"
+
+p1 <- pheatmap(la_summary,
+         cluster_cols = F,
+         display_numbers = test_labels,
+         fontsize_number=12,
+         cellheight=20,
+         annotation_row = my_cluster_col,
+         clustering_distance_row = "euclidean",
+         main = "12 samples euclidean")
+
+p1
+
+```
+
+
+#Likelihood of seeing an LA
+```{r}
+
+```
+
+
+
+#For the scRNAseq figures: you need all this for my PCA figure. But not sure if you need lines 105-129
+
+```{r}
+#reading the Seurat object RDS file
+d10x.seurat <- readRDS("data/fixed_annotated_aux.seurat.rds")
+
+```
+
+#adding more columns to meta data: based on pathology LA status classified patients as LA high or low, also have a colum for each tissue to say if it has any LAs(yes/no) @pak not sure if you need these two bottom code.
+```{r}
+#adding more columns to metadata about the LA immune activity at patient leve (High/Low); this is Yes/No LA activity for each tissue specimen (Yes/No).
+
+##Note tissue activity need to be updated in the annoatation tracker file. Just use the immune_activity column that is coming from the patient_la_anno
+
+excel_path <- "data/Annotation tracker.xlsx"
+sheets <- readxl::excel_sheets(excel_path)
+Annotation_tracker <- sheets %>% 
+                      lapply(. , function(s){ read_excel(excel_path, sheet = s) %>%
+                                              mutate(across(everything(),as.factor))}) %>%
+                      setNames(sheets)
+```
+
+```{r}
+Annotation_tracker$Clusters <- Annotation_tracker$Clusters %>% 
+                            mutate(Master_Assigned_Cell_Type= if_else(is.na(Updated_Anno),Master_Assigned_Cell_Type,Updated_Anno) ) %>% 
+                            dplyr::select(-Updated_Anno)
+
+back_up_meta_table <- d10x.seurat@meta.data 
+
+d10x.seurat@meta.data <- back_up_meta_table  %>%
+              rownames_to_column() %>%
+              left_join(Annotation_tracker$Major_groups,by=c("seurat_clusters"="Cluster_Number")) %>%
+              left_join(Annotation_tracker$Patient_LA_Status_Tissue_Level, by=c("orig.ident"= "Orig.ident")) %>%
+              left_join(Annotation_tracker$Epi_Data %>% mutate(Patient_ID = as.integer(Patient_ID)), by=c("Patient.No."="Patient_ID")) %>%
+  column_to_rownames()
+
+```
+
+
+```{r}
+###pull out just the Immune cells
+Immune.Cells <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c("B/Plasma cells", "T/NK cells", "Myeloid cells", "Mast cells"))
+
+
+Immune.Cells.Subset <- Immune.Cells
+
+##Subclustering just the Immune cells from LA high low
+Immune.cells.subclustering <- FindNeighbors(Immune.Cells.Subset, dims = 1:20)
+Immune.cells.subclustering <- FindClusters(Immune.cells.subclustering, resolution = 3)
+Immune.cells.subclustering <- RunUMAP(Immune.cells.subclustering, dims = 1:20)
+
+Immune.Cells.True <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(8, 12, 21, 23, 25, 36, 41, 43, 47, 53, 57:58, 60, 66, 68, 70, 75, 77:78, 81:82, 85, 87:91), invert = TRUE)
+
+Immune.Cells.True.subsetting <- Immune.Cells.True
+
+Immune.Cells.TrueV2 <- FindNeighbors(Immune.Cells.True.subsetting, dims = 1:20)
+Immune.Cells.TrueV2 <- FindClusters(Immune.Cells.TrueV2, resolution = 0.6)
+Immune.Cells.TrueV2 <- RunUMAP(Immune.Cells.TrueV2, dims = 1:20)
+
+#combining clusters into their immune families
+Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data  %>%
+                    mutate(Parent_immune_cluster = case_when( 
+                             seurat_clusters %in% c(0,1,2,3,5,6,7,8,9,10,12,14,21,23) ~ "T cells", 
+                             seurat_clusters %in% c(15,16) ~ "NK cells",
+                             seurat_clusters %in% c(4,11,20,22) ~ "Myeloid cells", 
+                             seurat_clusters == 19 ~ "Mast cells",
+                             seurat_clusters == 13 ~ "B cells",
+                             seurat_clusters %in% c(17,18) ~ "Plasma cells"))
+
+#pull out just peritoneal endometriosis samples
+Endometriosis <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal endometriosis")
+
+```
+
+#PCA based on the following cell proportion for each samples:
+
+Follow the below steps for PCA analysis 
+
+1. import Annotation tracker to add the LA_Status Epi_data tab - we need that col to label ggplot ( Master_Assigned_Cell_Type is already included in mate.data)
+2. import `broom`package to parse PCA output from `prcomp`
+3. Only meta.data from Seurat obj is needed for the PCA analysis
+4. If the label on plot is too crowded. consider using `Patient.No.`
+
+```{r}
+#Endo_table <- readRDS("data/fixed_annotated_aux.seurat.rds")@meta.data
+excel_path <- "data/Annotation tracker.xlsx"
+sheets <- readxl::excel_sheets(excel_path)
+Annotation_tracker <- sheets %>% 
+                      lapply(. , function(s){ read_excel(excel_path, sheet = s) %>% 
+                                              mutate(across(where(is.character),str_trim))
+                                              }) %>%
+                      setNames(sheets)
+
+Annotation_tracker$Epi_Data 
+```
+
+
+```{r}
+immue_endo_t<- Endometriosis@meta.data %>%
+                  #filter(LA_Status == c("High", "Low")) %>%
+                  #filter(Master_Assigned_Cell_Type) %>%
+                  #filter(! is.na(Number_of_lymphoid_aggregates)) %>%
+                  group_by(SampleName,Parent_immune_cluster) %>%
+                  #group_by(SampleName,Master_Assigned_Cell_Type) %>%
+                  summarise(count=n()) %>%
+                  mutate(prop= count/sum(count)*100)
+
+anno_df <- Endometriosis@meta.data  %>%
+           rownames_to_column() %>%
+           dplyr::select(-rowname) %>%
+           #left_join(Annotation_tracker$Epi_Data, by=c("Patient.No."="Patient_ID")) %>%
+           #dplyr::filter(LA_Status != "Exclude")  %>% 
+           distinct(Patient.No.,Tissue_LA_Activity,SampleName) %>%
+           column_to_rownames("SampleName")
+
+heatmap_df <- immue_endo_t  %>% 
+              dplyr::select(Parent_immune_cluster,prop,SampleName) %>%
+              spread(Parent_immune_cluster, prop) %>%
+              column_to_rownames("SampleName") %>%
+              as.matrix() %>%
+              replace(.,is.na(.),0) %>%
+              t()
+write_csv(as.data.frame(heatmap_df),"data/heatmap_df.csv")
+
+pc <- heatmap_df %>% 
+t %>%
+prcomp(scale = TRUE) 
+
+## Variance Explain in each PC
+
+pc_percent_explain <- pc %>%
+                      tidy("pcs") 
+
+  ggplot(pc_percent_explain,aes(x=PC,y=percent*100)) +
+    geom_bar(stat="identity") +
+    labs(y="Percent Variance Explained") +
+    theme_classic(base_size = 30)
+
+# A tricky one to show - how much each clusters contribute to each PC (only show largest contributors)
+var_explain <- varimax(pc$rotation)
+
+pc_x <- "1"
+pc_y <- "2"
+pc_per_x <- pc_percent_explain %>% filter(PC==pc_x) %>% dplyr::select(percent) %>% unlist *100
+pc_per_y <- pc_percent_explain %>% filter(PC==pc_y) %>% dplyr::select(percent) %>% unlist *100
+x_var <- paste(".fittedPC",pc_x,sep="")
+y_var <- paste(".fittedPC",pc_y,sep="")
+
+pc %>%
+augment(.) %>%
+inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
+  ggplot(aes(x=get(x_var), y=get(y_var),color=Tissue_LA_Activity,label=Patient.No.))+
+  geom_point(size=7) +
+  geom_text(nudge_x = 0.15, nudge_y = 0.15,angle=20,size=5) +
+  labs(x=paste("PC",pc_x," ",pc_per_x,"%",sep=""),y=paste("PC",pc_y," ",pc_per_y,"%",sep = "")) + 
+  theme_half_open(12) +
+  theme_classic(base_size = 30)
+
+```
+

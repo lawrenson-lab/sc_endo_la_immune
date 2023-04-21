@@ -284,6 +284,8 @@ p1
 
 
 write_csv(Immune.Cells.TrueV2@meta.data,"data/Immune_Cells_TrueV2_metadata.csv")
+
+Immune.Cells.TrueV2@meta.data%>%rownames_to_column("barcode")%>%write_csv("data/Immune_Cells_TrueV2_metadata1.csv")
 ```
 
 #combining clusters into their immune families
@@ -563,7 +565,7 @@ anno_df <- Endometriosis@meta.data  %>%
            dplyr::select(-rowname) %>%
            #left_join(Annotation_tracker$Epi_Data, by=c("Patient.No."="Patient_ID")) %>%
            #dplyr::filter(LA_Status != "Exclude")  %>% 
-           distinct(Patient.No.,Tissue_LA_Activity,SampleName) %>%
+           distinct(Patient.No.,LA_Status,SampleName) %>%
            column_to_rownames("SampleName")
 
 heatmap_df <- immue_endo_t  %>% 
@@ -592,8 +594,8 @@ pc_percent_explain <- pc %>%
 # A tricky one to show - how much each clusters contribute to each PC (only show largest contributors)
 var_explain <- varimax(pc$rotation)
 
-pc_x <- "1"
-pc_y <- "2"
+pc_x <- "2"
+pc_y <- "3"
 pc_per_x <- pc_percent_explain %>% filter(PC==pc_x) %>% dplyr::select(percent) %>% unlist *100
 pc_per_y <- pc_percent_explain %>% filter(PC==pc_y) %>% dplyr::select(percent) %>% unlist *100
 x_var <- paste(".fittedPC",pc_x,sep="")
@@ -602,7 +604,7 @@ y_var <- paste(".fittedPC",pc_y,sep="")
 pc %>%
 augment(.) %>%
 inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
-  ggplot(aes(x=get(x_var), y=get(y_var),color=Tissue_LA_Activity,label=Patient.No.))+
+  ggplot(aes(x=get(x_var), y=get(y_var),color=LA_Status,label=Patient.No.))+
   geom_point(size=7) +
   geom_text(nudge_x = 0.15, nudge_y = 0.15,angle=20,size=5) +
   labs(x=paste("PC",pc_x," ",pc_per_x,"%",sep=""),y=paste("PC",pc_y," ",pc_per_y,"%",sep = "")) + 

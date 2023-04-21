@@ -59,9 +59,7 @@ t_test
 p1 <- ggplot(LA.extended.data, aes(x=Category, y=Number_of_lymphoid_aggregates, color= Category)) + 
   scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
                                                     "Endometriosis" = "#d9f0d3")) + 
-  geom_beeswarm(size=2.5) + 
-  scale_fill_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
-                                                    "Endometriosis" = "#d9f0d3")) +
+  geom_beeswarm(size=3, shape =21, fill= "black", stroke =1.75) + 
   geom_text(x=1, y=12, label=paste0("p-value = ", t_test$p.value), colour="black", family = "san", fontface = "plain", size =5) +
   ggtitle("Number of LA in each Endometrioma and Endometriosis Block") + 
   theme_classic(base_size = 20)

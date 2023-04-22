@@ -288,6 +288,8 @@ write_csv(Immune.Cells.TrueV2@meta.data,"data/Immune_Cells_TrueV2_metadata.csv")
 Immune.Cells.TrueV2@meta.data%>%rownames_to_column("barcode")%>%write_csv("data/Immune_Cells_TrueV2_metadata1.csv")
 ```
 
+
+
 #combining clusters into their immune families
 ```{r}
 Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data  %>%
@@ -305,6 +307,36 @@ p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Parent_imm
 p1
 
 ```
+
+
+#Naming and combining immune clusters
+```{r}
+Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data  %>%
+                    mutate(Immune_Cluster_ID = case_when( 
+                             seurat_clusters == 0 ~ "Activated CD8 T-cells (1)", 
+                             seurat_clusters == 1 ~ "Effector Memmory CD8",
+                             seurat_clusters %in% c(2,3,8,10) ~ "Activated CD8 T-cells (2)", 
+                             seurat_clusters %in% c(4,20) ~ "Macrophage (1)",
+                             seurat_clusters == 5 ~ "Cytotoxic CD8 T-cells",
+                             seurat_clusters == 6 ~ "Central Memmory CD8 T-cells (1)",
+                             seurat_clusters == 7 ~ "Th2 T-cells",
+                             seurat_clusters %in% c(9,12) ~ "Central Memmory CD8 T-cells (2)",
+                             seurat_clusters == 11 ~ "Macrophages (2)",
+                             seurat_clusters == 13 ~ "Bcells",
+                             seurat_clusters == 14 ~ "Exhausted CD8 T-cells",
+                             seurat_clusters %in% c(15,16) ~ "NK cells",
+                             seurat_clusters %in% c(17,18) ~ "Plasma cells",
+                             seurat_clusters == 19 ~ "Mast cells",
+                             seurat_clusters == 21 ~ "Th17 T-cells",
+                             seurat_clusters == 22 ~ "Macrophages (3)",
+                             seurat_clusters == 23 ~ "Central Memory CD8 T-cells"))
+
+p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Immune_Cluster_ID", label = F, raster=FALSE) +
+  theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
+
+p1
+```
+
 
 
 ```{r}
@@ -479,7 +511,7 @@ Endometriosis <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal end
 #proportions by LA tissue activity
 Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
 
-counts.prop = data.frame(table(Endometriosis@meta.data$LA_Status, Endometriosis@meta.data$seurat_clusters))
+counts.prop = data.frame(table(Endometriosis@meta.data$LA_Status, Endometriosis@meta.data$Immune_Cluster_ID))
 counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
 head(counts.prop.perc)
 aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
@@ -521,7 +553,6 @@ p1 <- DimPlot(object = Endometriosis, pt.size = 0.1,split.by = "LA_Status", grou
 p1
 
 ```
-
 
 
 

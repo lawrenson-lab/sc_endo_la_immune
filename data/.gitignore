@@ -14,5 +14,7 @@
 !Endometriosis.LAgroup.meta.data.csv
 !Endometriosis.meta.data.csv
 !Myeloid_Cells_Markers.csv
+!NK_receptors.csv
+!M1_vs_M2.csv
 !cell_chat_db_communication.csv
 !.gitignore

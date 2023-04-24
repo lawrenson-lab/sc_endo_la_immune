@@ -316,19 +316,19 @@ Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data  %>%
                              seurat_clusters == 0 ~ "Activated CD8 T-cells (1)", 
                              seurat_clusters == 1 ~ "Effector Memory CD8",
                              seurat_clusters %in% c(2,3,8,10) ~ "Activated CD8 T-cells (2)", 
-                             seurat_clusters %in% c(4,20) ~ "Macrophage (1)",
+                             seurat_clusters %in% c(4,20) ~ "Macrophage M1/M2",
                              seurat_clusters == 5 ~ "Cytotoxic CD8 T-cells",
                              seurat_clusters == 6 ~ "Central Memory CD8 T-cells (1)",
                              seurat_clusters == 7 ~ "Th2 T-cells",
                              seurat_clusters %in% c(9,12) ~ "Central Memory CD8 T-cells (2)",
-                             seurat_clusters == 11 ~ "Macrophages (2)",
+                             seurat_clusters == 11 ~ "Macrophages M2",
                              seurat_clusters == 13 ~ "Bcells",
                              seurat_clusters == 14 ~ "Exhausted CD8 T-cells",
                              seurat_clusters %in% c(15,16) ~ "NK cells",
                              seurat_clusters %in% c(17,18) ~ "Plasma cells",
                              seurat_clusters == 19 ~ "Mast cells",
                              seurat_clusters == 21 ~ "Th17 T-cells",
-                             seurat_clusters == 22 ~ "Macrophages (3)",
+                             seurat_clusters == 22 ~ "Macrophages M1",
                              seurat_clusters == 23 ~ "Central Memory CD8 T-cells (3)"))
 
 p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Immune_Cluster_ID", label = F, raster=FALSE) +
@@ -343,18 +343,18 @@ Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID <- factor(Immune.Cells.TrueV2@me
                                      "NK cells", 
                                      "Bcells", 
                                      "Central Memory CD8 T-cells (1)", 
+                                     "Effector Memory CD8",
                                      "Th2 T-cells", 
-                                     "Effector Memory CD8", 
                                      "Exhausted CD8 T-cells", 
-                                     "Macrophages (2)", 
+                                     "Macrophages M2", 
                                      "Cytotoxic CD8 T-cells", 
                                      "Activated CD8 T-cells (1)",
                                      "Central Memory CD8 T-cells (3)",
-                                     "Macrophage (1)",
+                                     "Macrophage M1/M2",
                                      "Activated CD8 T-cells (2)",
                                      "Plasma cells",
                                      "Mast cells",
-                                     "Macrophages (3)"))
+                                     "Macrophages M1"))
 
 ```
 
@@ -569,11 +569,11 @@ rownames(table.counts) <- table.counts$Var2
 table.counts = table.counts[,-1]
 
 test <- chisq.test(table.counts)
-corrplot(test$residuals, is.cor = FALSE, method = 'color')
+pheatmap(test$residuals, treeheight_row=0,treeheight_col=0,cellwidth=25)
 
 
 Endometriosis@meta.data %>% 
-      group_by(seurat_clusters %>% as.character()) %>% 
+      group_by(Immune_Cluster_ID %>% as.character()) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
       print(n=18)
 
@@ -624,7 +624,7 @@ p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
 
 p1
 
-library(corrplot)
+library(pheatmap)
 
 table.counts = counts.prop %>% 
   spread(Var1, Freq)
@@ -632,15 +632,15 @@ rownames(table.counts) <- table.counts$Var2
 table.counts = table.counts[,-1]
 
 test <- chisq.test(table.counts)
-corrplot(test$residuals, is.cor = FALSE, method = 'color')
+pheatmap(test$residuals,treeheight_row=0,treeheight_col=0,cellwidth=25)
 
 ```
 
 
 
-
+#NK cell analysils
 ```{r}
-Endometriosis_NK <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "NK cells")
+Endometriosis_sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "NK cells")
 
 #Immune markers to identify immune cells
 Immune.markers = read.delim("data/NK_receptors.csv", sep = ",")
@@ -650,7 +650,7 @@ head(Immune.markers)
 selected.features = unique(c(as.character(unique(Immune.markers$Receptors))))
 
 
-p1 <-DotPlot(Endometriosis_NK, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "NK cells receptors in Endometriosis lesions") +
+p1 <-DotPlot(Endometriosis_sel, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "NK cells receptors in Endometriosis lesions") +
  theme_classic(base_size = 30) +
   theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.8, size = 25), axis.text.y = element_text(size = 20)) +
   coord_flip() +
@@ -658,10 +658,32 @@ p1 <-DotPlot(Endometriosis_NK, assay = "RNA", features = selected.features, grou
 
 
 p1
+
+
+##The code below is not working and I think that is because the markers I want are not expressed.
+d10x.seurat_Sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c("EnS cells", "EnEpi cells"))
+
+#Immune markers to identify immune cells
+Immune.markers = read.delim("data/NK_ligands.csv", sep = ",")
+head(Immune.markers)
+
+#selected.features = unique(c(as.character(unique(Immune.markers$Receptors)), as.character(unique(Immune.markers$Negative))))
+selected.features = unique(c(as.character(unique(Immune.markers$Receptors))))
+
+p1 <-DotPlot(d10x.seurat_Sel, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "NK cells Ligands in Endometriosis lesions") +
+ theme_classic(base_size = 30) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.8, size = 25), axis.text.y = element_text(size = 20)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+p1
+
 ```
 
+#Macs analysis
 ```{r}
-Endometriosis_Macs <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "Macrophage (1)")
+Endometriosis_sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "Macrophage M1/M2")
 
 #Immune markers to identify immune cells
 Immune.markers = read.delim("data/M1_vs_M2.csv", sep = ",")
@@ -670,7 +692,7 @@ head(Immune.markers)
 #selected.features = unique(c(as.character(unique(Immune.markers$Receptors)), as.character(unique(Immune.markers$Negative))))
 selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
 
-p1 <-DotPlot(Endometriosis_Macs, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "Mac cells receptors in Endometriosis lesions") +
+p1 <-DotPlot(Endometriosis_sel, assay = "RNA", features = selected.features[28:39], group.by = "LA_Status") + labs(title = "Mac cells receptors in Endometriosis lesions") +
  theme_classic(base_size = 30) +
   theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.8, size = 25), axis.text.y = element_text(size = 20)) +
   coord_flip() +
@@ -678,6 +700,8 @@ p1 <-DotPlot(Endometriosis_Macs, assay = "RNA", features = selected.features, gr
 
 
 p1
+
+
 
 
 ```
@@ -751,8 +775,8 @@ pc_percent_explain <- pc %>%
 # A tricky one to show - how much each clusters contribute to each PC (only show largest contributors)
 var_explain <- varimax(pc$rotation)
 
-pc_x <- "2"
-pc_y <- "3"
+pc_x <- "1"
+pc_y <- "2"
 pc_per_x <- pc_percent_explain %>% filter(PC==pc_x) %>% dplyr::select(percent) %>% unlist *100
 pc_per_y <- pc_percent_explain %>% filter(PC==pc_y) %>% dplyr::select(percent) %>% unlist *100
 x_var <- paste(".fittedPC",pc_x,sep="")
@@ -768,7 +792,9 @@ inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
   theme_half_open(12) +
   theme_classic(base_size = 30)
 
-
+##to see how much each cell types/seurat cluster is contributing to the PCA
+rownames(pc)<-1:24
+tail(sort(abs(pc$rotation[,1])))
 ```
 
 #Sanky plot to compare resolution of 0.4 from previous analysis when pulling out Immune cells in LA group to resolution of 0.6 in current analysis

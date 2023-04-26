@@ -603,7 +603,7 @@ DotPlot(Immune.Cells.TrueV2_sel, group.by = "Immune_Cluster_ID", features = c("P
   coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
-DotPlot(Immune.Cells.TrueV2_sel, group.by = "Immune_Cluster_ID", features = c("CD80", "CD86", "CD274", "PDCD1LG2", "PVR")) + 
+DotPlot(Immune.Cells.TrueV2_sel, group.by = "Immune_Cluster_ID", features = c("CD80", "CD86", "CD274", "PDCD1LG2", "PVR", "NECTIN2")) + 
   theme_classic(base_size = 25) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
   coord_flip() +
@@ -614,11 +614,20 @@ d10x.seurat_Sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c
 
 d10x.seurat_Sel <- subset(d10x.seurat_Sel, subset = Class %in% "Endometrioma")
                             
-DotPlot(d10x.seurat_Sel, group.by = "Master_Assigned_Cell_Type", features = c("CD80", "CD86", "CD274", "PDCD1LG2", "PVR")) + 
+DotPlot(d10x.seurat_Sel, group.by = "Master_Assigned_Cell_Type", features = c("CD80", "CD86", "CD274", "PDCD1LG2", "PVR", "NECTIN2")) + 
   theme_classic(base_size = 20) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, color = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
   coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+Immune.Cells.TrueV2_sel@meta.data %>% 
+      group_by(Immune_Cluster_ID) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=29)
+
+
+
 ```
 
 

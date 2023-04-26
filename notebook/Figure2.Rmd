@@ -301,7 +301,7 @@ Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data  %>%
                              seurat_clusters == 13 ~ "B cells",
                              seurat_clusters %in% c(17,18) ~ "Plasma cells"))
 
-p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Parent_immune_cluster", label = T, raster=FALSE) +
+p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Parent_immune_cluster", split.by = "Class", label = T, raster=FALSE) +
   theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
 
 p1
@@ -316,19 +316,19 @@ Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data  %>%
                              seurat_clusters == 0 ~ "Activated CD8 T-cells (1)", 
                              seurat_clusters == 1 ~ "Effector Memory CD8",
                              seurat_clusters %in% c(2,3,8,10) ~ "Activated CD8 T-cells (2)", 
-                             seurat_clusters %in% c(4,20) ~ "Macrophage (1)",
+                             seurat_clusters %in% c(4,20) ~ "Macrophage M1/M2",
                              seurat_clusters == 5 ~ "Cytotoxic CD8 T-cells",
                              seurat_clusters == 6 ~ "Central Memory CD8 T-cells (1)",
                              seurat_clusters == 7 ~ "Th2 T-cells",
                              seurat_clusters %in% c(9,12) ~ "Central Memory CD8 T-cells (2)",
-                             seurat_clusters == 11 ~ "Macrophages (2)",
+                             seurat_clusters == 11 ~ "Macrophages M2",
                              seurat_clusters == 13 ~ "Bcells",
                              seurat_clusters == 14 ~ "Exhausted CD8 T-cells",
                              seurat_clusters %in% c(15,16) ~ "NK cells",
                              seurat_clusters %in% c(17,18) ~ "Plasma cells",
                              seurat_clusters == 19 ~ "Mast cells",
                              seurat_clusters == 21 ~ "Th17 T-cells",
-                             seurat_clusters == 22 ~ "Macrophages (3)",
+                             seurat_clusters == 22 ~ "Macrophages M1",
                              seurat_clusters == 23 ~ "Central Memory CD8 T-cells (3)"))
 
 p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Immune_Cluster_ID", label = F, raster=FALSE) +
@@ -343,18 +343,18 @@ Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID <- factor(Immune.Cells.TrueV2@me
                                      "NK cells", 
                                      "Bcells", 
                                      "Central Memory CD8 T-cells (1)", 
+                                     "Effector Memory CD8",
                                      "Th2 T-cells", 
-                                     "Effector Memory CD8", 
                                      "Exhausted CD8 T-cells", 
-                                     "Macrophages (2)", 
+                                     "Macrophages M2", 
                                      "Cytotoxic CD8 T-cells", 
                                      "Activated CD8 T-cells (1)",
                                      "Central Memory CD8 T-cells (3)",
-                                     "Macrophage (1)",
+                                     "Macrophage M1/M2",
                                      "Activated CD8 T-cells (2)",
                                      "Plasma cells",
                                      "Mast cells",
-                                     "Macrophages (3)"))
+                                     "Macrophages M1"))
 
 ```
 
@@ -492,7 +492,7 @@ p1
 #proportions by Major class
 Immune.Cells.TrueV2@meta.data <- droplevels(Immune.Cells.TrueV2@meta.data)
 
-counts.prop = data.frame(table(Immune.Cells.TrueV2@meta.data$Major.Class, Immune.Cells.TrueV2@meta.data$seurat_clusters))
+counts.prop = data.frame(table(Immune.Cells.TrueV2@meta.data$Class, Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID))
 counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
 head(counts.prop.perc)
 aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
@@ -504,24 +504,197 @@ counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
 bsize = 20
 p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
   geom_bar(position="stack",stat = "identity", width=0.8) +
-  scale_fill_manual(name="Major Class", values = c("Endometrioma" = "#7b3294", 
-                      "Eutopic Endometrium" = "#c2a5cf", 
-                      "Endometriosis" = "#d9f0d3", 
-                      "No endometriosis detected" = "#a6dba0",
+  scale_fill_manual(name="Class", values = c("Endometrioma" = "#7b3294", 
+                      "Eutopic endometrium" = "#c2a5cf", 
+                      "Peritoneal endometriosis" = "#d9f0d3", 
                       "Unaffected ovary" = "#008837")) +
   scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
   coord_flip() +
-  theme_set(theme_classic(base_size = 30)) +
+  theme_set(theme_classic(base_size = 25)) +
   theme(plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 270, hjust = 1),
-        axis.text.y = element_text(angle = 0, hjust = 1),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
         axis.title.x = element_blank(),
         axis.title.y = element_blank()) +
-  ggtitle('Proportion of Immune cells TrueV2 res0.6 in Major class') +
-  theme_classic(base_size = 20)
-
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in Major class')
 p1
 ```
+
+```{r}
+#By hormone status
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal endometriosis")
+
+Immune.Cells.TrueV2_sel@meta.data <- droplevels(Immune.Cells.TrueV2_sel@meta.data)
+
+counts.prop = data.frame(table(Immune.Cells.TrueV2_sel@meta.data$Menstral_cycle, Immune.Cells.TrueV2_sel@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Menstrual cycle", values = c("Follicular" = "orange",
+                                             "Luteal" = "red",
+                                             "Hormone" = "blue")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 25)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in Major class')
+p1
+
+```
+
+#mutations in peritoneal endometriosis and endometrioma
+```{r}
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2, subset = Class %in% c("Endometrioma", "Peritoneal endometriosis"))
+
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2_sel, subset = KRAS_Mut %in% c("G12", "WT"))
+
+Immune.Cells.TrueV2_sel@meta.data <- droplevels(Immune.Cells.TrueV2_sel@meta.data)
+
+counts.prop = data.frame(table(Immune.Cells.TrueV2_sel@meta.data$KRAS_Mut, Immune.Cells.TrueV2_sel@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="KRAS mutation", values = c("G12" = "orange",
+                                             "WT" = "red")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 25)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in ARID1A mutation')
+p1
+
+```
+
+
+
+
+#Exhausted markers
+```{r}
+#checkpoint receptors on Immune cells
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2, subset = Class %in% "Endometrioma")
+
+DotPlot(Immune.Cells.TrueV2_sel, group.by = "Immune_Cluster_ID", features = c("PDCD1", "CTLA4", "TIGIT", "HAVCR2", "VSIR", "LAG3")) + 
+  theme_classic(base_size = 25) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+DotPlot(Immune.Cells.TrueV2_sel, group.by = "Immune_Cluster_ID", features = c("CD80", "CD86", "CD274", "PDCD1LG2", "PVR")) + 
+  theme_classic(base_size = 25) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+d10x.seurat_Sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c("EnS cells", "EnEpi cells", "Epithelial cells", "Mesenchymal cells"))
+
+d10x.seurat_Sel <- subset(d10x.seurat_Sel, subset = Class %in% "Endometrioma")
+                            
+DotPlot(d10x.seurat_Sel, group.by = "Master_Assigned_Cell_Type", features = c("CD80", "CD86", "CD274", "PDCD1LG2", "PVR")) + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, color = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+```
+
+
+
+
+#pull out Bcells and Plasma from Immunce cells
+```{r}
+
+DotPlot(Immune.Cells.TrueV2, group.by = "Immune_Cluster_ID", features = c("CD74", "CD44", "CXCR2", "CXCR4", "ACKR3")) + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 15)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+
+
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2, subset = Parent_immune_cluster %in% "B cells")
+#Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2_sel, subset = Parent_immune_cluster %in% "B cells")
+
+
+
+#Immune markers to identify immune cells
+Immune.markers = read.delim("data/Bcells_PlasmaCell_Markers.csv", sep = ",")
+head(Immune.markers)
+
+#selected.features = unique(c(as.character(unique(Immune.markers$Positive)), as.character(unique(Immune.markers$Negative))))
+selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
+
+
+
+DotPlot(Immune.Cells.TrueV2_sel, group.by = "Class", features = selected.features[c(1:5,11,14,15,23,24,27,29:33,36,37,39,40,42:48)]) + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 12, colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+d10x.seurat_Sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c("EnS cells", "EnEpi cells", "Epithelial cells", "Mesenchymal cells"))
+
+d10x.seurat_Sel <- subset(d10x.seurat_Sel, subset = Class %in% c("Endometrioma", "Peritoneal endometriosis"))
+
+DotPlot(d10x.seurat_Sel, group.by = "Master_Assigned_Cell_Type", features = c("TNFSF13B", "TNFSF13", "CXCL13", "CCL21", "CXCL12", "MIF", "CCL19", "CCL20", "CCL25", "CCL28")) + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+```
+
+
+#Macs analysis
+```{r}
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2, subset = Immune_Cluster_ID %in% c("Macrophage M1/M2", "Macrophages M1", "Macrophages M2"))
+
+#Immune markers to identify immune cells
+Immune.markers = read.delim("data/M1_vs_M2.csv", sep = ",")
+head(Immune.markers)
+
+#selected.features = unique(c(as.character(unique(Immune.markers$Receptors)), as.character(unique(Immune.markers$Negative))))
+selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
+
+p1 <-DotPlot(Immune.Cells.TrueV2_sel, assay = "RNA", features = selected.features[28:40], group.by = "Class") + labs(title = "Mac cells receptors in Endometriosis lesions") +
+ theme_classic(base_size = 25) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, size = 20, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+p1
+
+
+
+
+```
+
 
 
 #pull out just peritoneal endometriosis samples
@@ -569,11 +742,11 @@ rownames(table.counts) <- table.counts$Var2
 table.counts = table.counts[,-1]
 
 test <- chisq.test(table.counts)
-corrplot(test$residuals, is.cor = FALSE, method = 'color')
+pheatmap(test$residuals, treeheight_row=0,treeheight_col=0,cellwidth=25)
 
 
 Endometriosis@meta.data %>% 
-      group_by(seurat_clusters %>% as.character()) %>% 
+      group_by(Immune_Cluster_ID %>% as.character()) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
       print(n=18)
 
@@ -624,7 +797,7 @@ p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
 
 p1
 
-library(corrplot)
+library(pheatmap)
 
 table.counts = counts.prop %>% 
   spread(Var1, Freq)
@@ -632,15 +805,15 @@ rownames(table.counts) <- table.counts$Var2
 table.counts = table.counts[,-1]
 
 test <- chisq.test(table.counts)
-corrplot(test$residuals, is.cor = FALSE, method = 'color')
+pheatmap(test$residuals,treeheight_row=0,treeheight_col=0,cellwidth=25)
 
 ```
 
 
 
-
+#NK cell analysils
 ```{r}
-Endometriosis_NK <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "NK cells")
+Endometriosis_sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "NK cells")
 
 #Immune markers to identify immune cells
 Immune.markers = read.delim("data/NK_receptors.csv", sep = ",")
@@ -650,7 +823,7 @@ head(Immune.markers)
 selected.features = unique(c(as.character(unique(Immune.markers$Receptors))))
 
 
-p1 <-DotPlot(Endometriosis_NK, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "NK cells receptors in Endometriosis lesions") +
+p1 <-DotPlot(Endometriosis_sel, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "NK cells receptors in Endometriosis lesions") +
  theme_classic(base_size = 30) +
   theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.8, size = 25), axis.text.y = element_text(size = 20)) +
   coord_flip() +
@@ -658,10 +831,32 @@ p1 <-DotPlot(Endometriosis_NK, assay = "RNA", features = selected.features, grou
 
 
 p1
+
+
+##The code below is not working and I think that is because the markers I want are not expressed.
+d10x.seurat_Sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c("EnS cells", "EnEpi cells"))
+
+#Immune markers to identify immune cells
+Immune.markers = read.delim("data/NK_ligands.csv", sep = ",")
+head(Immune.markers)
+
+#selected.features = unique(c(as.character(unique(Immune.markers$Receptors)), as.character(unique(Immune.markers$Negative))))
+selected.features = unique(c(as.character(unique(Immune.markers$Receptors))))
+
+p1 <-DotPlot(d10x.seurat_Sel, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "NK cells Ligands in Endometriosis lesions") +
+ theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.8, size = 25), axis.text.y = element_text(size = 10)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+p1
+
 ```
 
+#Macs analysis
 ```{r}
-Endometriosis_Macs <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "Macrophage (1)")
+Endometriosis_sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% c("Macrophage M1/M2", "Macrophages M1", "Macrophages Me"))
 
 #Immune markers to identify immune cells
 Immune.markers = read.delim("data/M1_vs_M2.csv", sep = ",")
@@ -670,7 +865,7 @@ head(Immune.markers)
 #selected.features = unique(c(as.character(unique(Immune.markers$Receptors)), as.character(unique(Immune.markers$Negative))))
 selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
 
-p1 <-DotPlot(Endometriosis_Macs, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "Mac cells receptors in Endometriosis lesions") +
+p1 <-DotPlot(Endometriosis_sel, assay = "RNA", features = selected.features[28:39], group.by = "Class") + labs(title = "Mac cells receptors in Endometriosis lesions") +
  theme_classic(base_size = 30) +
   theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.8, size = 25), axis.text.y = element_text(size = 20)) +
   coord_flip() +
@@ -680,7 +875,34 @@ p1 <-DotPlot(Endometriosis_Macs, assay = "RNA", features = selected.features, gr
 p1
 
 
+
+
 ```
+
+
+#Bcells analysis
+```{r}
+Endometriosis_sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% c("Bcells", "Plasma cells"))
+
+#Immune markers to identify immune cells
+Immune.markers = read.delim("data/Bcells_PlasmaCell_Markers.csv", sep = ",")
+head(Immune.markers)
+
+#selected.features = unique(c(as.character(unique(Immune.markers$Receptors)), as.character(unique(Immune.markers$Negative))))
+selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
+
+p1 <-DotPlot(Endometriosis_sel, assay = "RNA", features = selected.features, group.by = "Immune_Cluster_ID") + labs(title = "B-cells in Endometriosis lesions") +
+ theme_classic(base_size = 30) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.8, size = 25), axis.text.y = element_text(size = 10)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+p1
+```
+
+
+
 
 
 ## Fig 2D
@@ -751,8 +973,8 @@ pc_percent_explain <- pc %>%
 # A tricky one to show - how much each clusters contribute to each PC (only show largest contributors)
 var_explain <- varimax(pc$rotation)
 
-pc_x <- "2"
-pc_y <- "3"
+pc_x <- "1"
+pc_y <- "2"
 pc_per_x <- pc_percent_explain %>% filter(PC==pc_x) %>% dplyr::select(percent) %>% unlist *100
 pc_per_y <- pc_percent_explain %>% filter(PC==pc_y) %>% dplyr::select(percent) %>% unlist *100
 x_var <- paste(".fittedPC",pc_x,sep="")
@@ -768,7 +990,9 @@ inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
   theme_half_open(12) +
   theme_classic(base_size = 30)
 
-
+##to see how much each cell types/seurat cluster is contributing to the PCA
+rownames(pc)<-1:24
+tail(sort(abs(pc$rotation[,1])))
 ```
 
 #Sanky plot to compare resolution of 0.4 from previous analysis when pulling out Immune cells in LA group to resolution of 0.6 in current analysis
@@ -923,4 +1147,3 @@ sankeyNetwork(Links = data.long.class, Nodes = nodes,
               Value = "value", NodeID = "name",
               sinksRight=T, colourScale=ColourScal, nodeWidth=40, fontSize=20, nodePadding=20)
 ```
-

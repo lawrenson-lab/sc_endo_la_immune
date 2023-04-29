@@ -597,27 +597,29 @@ p1
 #checkpoint receptors on Immune cells
 Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2, subset = Class %in% "Endometrioma")
 
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2_sel, subset = Immune_Cluster_ID %in% c("Macrophages M2", "Macrophage M1/M2", "Mast cells", "Macrophages M1"))
+
 DotPlot(Immune.Cells.TrueV2_sel, group.by = "Immune_Cluster_ID", features = c("PDCD1", "CTLA4", "TIGIT", "HAVCR2", "VSIR", "LAG3")) + 
   theme_classic(base_size = 25) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
-  coord_flip() +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, colour = "black"), axis.text.y = element_text(size = 20, colour = "black")) +
+  #coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 DotPlot(Immune.Cells.TrueV2_sel, group.by = "Immune_Cluster_ID", features = c("CD80", "CD86", "CD274", "PDCD1LG2", "PVR", "NECTIN2")) + 
-  theme_classic(base_size = 25) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
-  coord_flip() +
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, colour = "black"), axis.text.y = element_text(size = 20, colour = "black")) +
+  #coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 
-d10x.seurat_Sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c("EnS cells", "EnEpi cells", "Epithelial cells", "Mesenchymal cells"))
+d10x.seurat_Sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c("EnS cells", "EnEpi cells", "Epithelial cells"))
 
 d10x.seurat_Sel <- subset(d10x.seurat_Sel, subset = Class %in% "Endometrioma")
                             
 DotPlot(d10x.seurat_Sel, group.by = "Master_Assigned_Cell_Type", features = c("CD80", "CD86", "CD274", "PDCD1LG2", "PVR", "NECTIN2")) + 
   theme_classic(base_size = 20) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, color = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
-  coord_flip() +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, color = "black"), axis.text.y = element_text(size = 20, colour = "black")) +
+  #coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 
@@ -636,17 +638,28 @@ Immune.Cells.TrueV2_sel@meta.data %>%
 #pull out Bcells and Plasma from Immunce cells
 ```{r}
 
-DotPlot(Immune.Cells.TrueV2, group.by = "Immune_Cluster_ID", features = c("CD74", "CD44", "CXCR2", "CXCR4", "ACKR3")) + 
-  theme_classic(base_size = 20) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 15)) +
-  coord_flip() +
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2, subset = Parent_immune_cluster %in% c("B cells"))
+
+
+DotPlot(Immune.Cells.TrueV2_sel, group.by = "Parent_immune_cluster", features = c("CD74", "CD44", "CXCR2", "CXCR4")) + 
+  theme_classic(base_size = 25) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, colour = "black"), axis.text.y = element_text(size = 20, colour = "black")) +
+  #coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 
 
 
-Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2, subset = Parent_immune_cluster %in% "B cells")
+Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2_sel, subset = Class %in% "Peritoneal Endometriosis")
+
 #Immune.Cells.TrueV2_sel <- subset(Immune.Cells.TrueV2_sel, subset = Parent_immune_cluster %in% "B cells")
+
+DotPlot(Immune.Cells.TrueV2_sel, group.by = "Immune_Cluster_ID", features = c("TNFSF13B", "CXCL13", "CXCL12", "MIF", "CCL19", "CCL20")) + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
+  #coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
 
 
 
@@ -659,10 +672,10 @@ selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
 
 
 
-DotPlot(Immune.Cells.TrueV2_sel, group.by = "Class", features = selected.features[c(1:5,11,14,15,23,24,27,29:33,36,37,39,40,42:48)]) + 
+DotPlot(Immune.Cells.TrueV2_sel, group.by = "Class", features = selected.features[c(15,23:24,29:33,56)]) + 
   theme_classic(base_size = 20) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 12, colour = "black")) +
-  coord_flip() +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, size = 25, colour = "black"), axis.text.y = element_text(size = 25, colour = "black")) +
+  #coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 
@@ -670,10 +683,10 @@ d10x.seurat_Sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% c
 
 d10x.seurat_Sel <- subset(d10x.seurat_Sel, subset = Class %in% c("Endometrioma", "Peritoneal endometriosis"))
 
-DotPlot(d10x.seurat_Sel, group.by = "Master_Assigned_Cell_Type", features = c("TNFSF13B", "TNFSF13", "CXCL13", "CCL21", "CXCL12", "MIF", "CCL19", "CCL20", "CCL25", "CCL28")) + 
+DotPlot(d10x.seurat_Sel, group.by = "Master_Assigned_Cell_Type", features = c("TNFSF13B", "CXCL13", "CXCL12", "MIF", "CCL19", "CCL20")) + 
   theme_classic(base_size = 20) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
-  coord_flip() +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
+  #coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 ```
@@ -690,10 +703,10 @@ head(Immune.markers)
 #selected.features = unique(c(as.character(unique(Immune.markers$Receptors)), as.character(unique(Immune.markers$Negative))))
 selected.features = unique(c(as.character(unique(Immune.markers$Positive))))
 
-p1 <-DotPlot(Immune.Cells.TrueV2_sel, assay = "RNA", features = selected.features[28:40], group.by = "Class") + labs(title = "Mac cells receptors in Endometriosis lesions") +
+p1 <-DotPlot(Immune.Cells.TrueV2_sel, assay = "RNA", features = selected.features[28:39], group.by = "Class") + labs(title = "Mac cells receptors in Endometriosis lesions") +
  theme_classic(base_size = 25) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, size = 20, colour = "black"), axis.text.y = element_text(size = 15, colour = "black")) +
-  coord_flip() +
+  theme(axis.text.x = element_text(angle = 20, vjust = 0.8, hjust = 0.5, size = 20, colour = "black"), axis.text.y = element_text(size = 20, colour = "black")) +
+  #coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 

@@ -104,6 +104,7 @@ p1
 
 FeaturePlot(d10x.seurat, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM")) +
   theme_classic(base_size = 20)
+
 ```
 
 
@@ -395,6 +396,16 @@ pheatmap(data.avg.exp.scaled,
          main = paste0("DEG expression signature clusters (n=", length(unique(features.deg$gene)), ")"), 
          cutree_cols = 10 )
 ```
+
+
+#saving the true immune cells as a RDS file
+```{r}
+saveRDS(Immune.Cells.TrueV2, "Immune_Cell_annotation.rds")
+```
+
+
+
+
 
 ```{r}
 Immune.Cells.TrueV2@meta.data <- droplevels(Immune.Cells.TrueV2@meta.data)

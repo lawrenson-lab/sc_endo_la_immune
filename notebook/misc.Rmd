@@ -107,6 +107,7 @@ tbl <- endo_cluster %>%
 
 ggplot(tbl,aes(x=final_major_type,y=prop,fill=LA_Status)) +
   geom_dotplot(binaxis = "y", stackdir = "centerwhole", binwidth =0.5, position = "dodge") +
+  geom_boxplot()+
   theme_classic() #+
   #facet_wrap(~final_major_type, cell)
 

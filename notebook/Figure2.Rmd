@@ -233,6 +233,38 @@ pheatmap(data.avg.exp.scaled,
 ```
 
 
+#Identifying the non-immune cells
+```{r}
+Unkwn_cells <- subset(Immune.cells.subclustering, subset = seurat_clusters %in% c(8, 12, 21, 23, 25, 36, 41, 43, 47, 53, 57:58, 60, 66, 68, 70, 75, 77:78, 81:82, 85, 87:91))
+
+
+#Immune markers to identify immune cells
+Immune.markers = read.delim("data/Atlas_epithelial_Mesenchymal_Markers.csv", sep = ",")
+head(Immune.markers)
+
+selected.features = unique(as.character(unique(Immune.markers$Gene)))
+
+
+p1 <-DotPlot(Unkwn_cells, assay = "RNA", features = selected.features) + labs(title = "Identifying Unknown cells res0.6") +
+ theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+p1
+
+
+Unkwn_cells@meta.data %>% 
+      group_by(seurat_clusters %>% as.character()) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=29)
+
+```
+
+
+
+
 
 #Figure 2A
 #remove non-Immune cell clusters

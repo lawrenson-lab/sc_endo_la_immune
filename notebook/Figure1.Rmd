@@ -35,6 +35,34 @@ setwd("/home/harom/Code/sc_endo_la_immune")
 ```
 
 
+#Immune cells in all the classes
+```{r}
+#load Immune cells RDS file
+ImmCells <- readRDS("data/fixed_annotated_aux.seurat.rds")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ##Figure1A will be an HE of LA high with big aggregate and a small aggregate

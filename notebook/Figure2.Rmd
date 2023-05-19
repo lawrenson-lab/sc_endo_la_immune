@@ -486,6 +486,11 @@ p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Parent_imm
 
 p1
 
+Immune.Cells.TrueV2@meta.data %>% 
+      group_by(Parent_immune_cluster) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=29)
+
 ```
 
 
@@ -536,6 +541,11 @@ Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID <- factor(Immune.Cells.TrueV2@me
                                      "Mast cells",
                                      "Macrophages M1"))
 
+
+Immune.Cells.TrueV2@meta.data %>% 
+      group_by(Immune_Cluster_ID) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=29)
 ```
 
 

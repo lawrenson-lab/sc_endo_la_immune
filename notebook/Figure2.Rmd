@@ -102,7 +102,7 @@ p1
 #p1
 #dev.off()
 
-FeaturePlot(d10x.seurat, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM")) +
+FeaturePlot(d10x.seurat, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM", "CD274", "PDCD1LG2")) +
   theme_classic(base_size = 20)
 
 ```
@@ -947,12 +947,12 @@ p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
   coord_flip() +
   theme_set(theme_classic(base_size = 30)) +
   theme(plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 270, hjust = 1),
-        axis.text.y = element_text(angle = 0, hjust = 1),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
         axis.title.x = element_blank(),
         axis.title.y = element_blank()) +
   ggtitle('Proportion of Immune cells TrueV2 res0.6 in LA Status') +
-  theme_classic(base_size = 20)
+  theme_classic(base_size = 25)
 
 p1
 
@@ -974,12 +974,55 @@ Endometriosis@meta.data %>%
 
 write_csv(Endometriosis@meta.data,"data/Endometriosis.meta.data.csv")
 
-p1 <- DimPlot(object = Endometriosis, pt.size = 0.1,split.by = "LA_Status", group.by ="Parent_immune_cluster", label = T, raster=FALSE) +
+p1 <- DimPlot(object = Endometriosis, pt.size = 0.1,split.by = "LA_Status", group.by ="Immune_Cluster_ID", label = T, raster=FALSE) +
   theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
 
 p1
 
 markers <- FindAllMarkers(Immune.Cells.TrueV2, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+
+
+#get fold change for Immunce clusters
+table.class.cell = table(Endometriosis@meta.data$Immune_Cluster_ID, Endometriosis@meta.data$LA_Status)
+table.class.cell.perc = table.class.cell/rowSums(table.class.cell)
+
+obs.class.perc = table(Endometriosis@meta.data$LA_Status)/length(Endometriosis@meta.data$LA_Status) #expected proportion of high and low in entire data
+table.fc = table.class.cell
+table.fc = is.na(table.fc)
+
+for (class in colnames(table.class.cell.perc)) {
+        for (cell.type in rownames(table.class.cell.perc)) {
+                expected = table.class.cell.perc[cell.type, class]
+                obs = obs.class.perc[class]
+                if (obs > expected) {
+                        ratio = -(obs/expected)
+                } else {
+                        ratio = expected/obs
+                }
+                #ratio = expected/obs
+                
+                table.fc[cell.type, class] = ratio
+        }
+}
+
+
+quantile_breaks <- function(xs, n = 10) {
+        breaks <- quantile(xs, probs = seq(0, 1, length.out = n))
+        breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(table.fc, n = 11)
+
+table.fc = table.fc[,c("High", "Low")]
+
+
+pheatmap(t(table.fc), 
+         display_numbers = signif(t(table.fc), 3),
+         color             = colorRampPalette(c("#81B8D5", "white", "#E37F65"))(10),
+         breaks            = mat_breaks,
+         cluster_rows      = F,
+         cluster_cols      = F,
+         fontsize          = 14)
 
 ```
 
@@ -1369,3 +1412,13 @@ sankeyNetwork(Links = data.long.class, Nodes = nodes,
               Value = "value", NodeID = "name",
               sinksRight=T, colourScale=ColourScal, nodeWidth=40, fontSize=20, nodePadding=20)
 ```
+
+
+
+#Pull out just Endometrioma
+```{r}
+Endometrioma <- subset(d10x.seurat, subset = Class %in% "Endometrioma")
+
+FeaturePlot(Endometrioma, features = c("CD274", "PDCD1LG2"))
+```
+

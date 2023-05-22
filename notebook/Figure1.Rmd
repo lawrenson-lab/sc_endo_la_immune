@@ -25,6 +25,7 @@ library(ggplot2)
 library(gdata)
 library(ggbeeswarm)
 library(beeswarm)
+library(pheatmap)
 ```
 
 
@@ -38,11 +39,78 @@ setwd("/home/harom/Code/sc_endo_la_immune")
 #Immune cells in all the classes
 ```{r}
 #load Immune cells RDS file
-ImmCells <- readRDS("data/fixed_annotated_aux.seurat.rds")
+Immune.Cells.TrueV2<- readRDS("data/Immune_Cell_annotation.rds")
 ```
 
 
+#Getting the Fold change enrichment accross class
+```{r}
+table.class.cell = table(Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID, Immune.Cells.TrueV2@meta.data$Class)
+table.class.cell.perc = table.class.cell/rowSums(table.class.cell)
 
+obs.class.perc = table(Immune.Cells.TrueV2@meta.data$Class)/length(Immune.Cells.TrueV2@meta.data$Class)
+table.fc = table.class.cell
+table.fc = is.na(table.fc)
+
+for (class in colnames(table.class.cell.perc)) {
+        for (cell.type in rownames(table.class.cell.perc)) {
+                expected = table.class.cell.perc[cell.type, class]
+                obs = obs.class.perc[class]
+                if (obs > expected) {
+                        ratio = -(obs/expected)
+                } else {
+                        ratio = expected/obs
+                }
+                #ratio = expected/obs
+                
+                table.fc[cell.type, class] = ratio
+        }
+}
+
+
+quantile_breaks <- function(xs, n = 10) {
+        breaks <- quantile(xs, probs = seq(0, 1, length.out = n))
+        breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(table.fc, n = 11)
+
+table.fc = table.fc[,c("Endometrioma", "Endometriosis", "Eutopic Endometrium", "Unaffected ovary")]
+
+
+pheatmap(t(table.fc), 
+         display_numbers = signif(t(table.fc), 3),
+         color             = colorRampPalette(c("#81B8D5", "white", "#E37F65"))(10),
+         breaks            = mat_breaks,
+         cluster_rows      = F,
+         cluster_cols      = F,
+         fontsize          = 14)
+```
+
+
+#looking at specific receptors and ligans in EnEpi and Central Memory in endometriosis
+```{r}
+EnEpi <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% "EnEpi cells")
+
+EnEpi<- subset(EnEpi, subset = Class %in% "Peritoneal endometriosis")
+
+DotPlot(EnEpi, assay = "RNA", features = 
+          c("PTN", "IL15", "COL4A2", "COL4A1", "CLEC2B", "THY1"), group.by = "LA_Status") + labs(title = "Sender signals from EnEnP") +
+ theme_classic(base_size = 25) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+CentMemory2 <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "Central Memory CD8 T-cells (2)")
+
+DotPlot(CentMemory2, assay = "RNA", features = 
+          c("NCL", "IL15RA", "IL2RB", "CD44", "ITGA1", "ITGB1", "KLRB1", "CD8A", "ITGAM", "ITGB2", "ITGA4", "ITGB7"), group.by = "LA_Status") + labs(title = "Recipient signals from Central Memory CD8 T-cells (2)") +
+ theme_classic(base_size = 25) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8), axis.text.y = element_text(size = 9)) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+```
 
 
 

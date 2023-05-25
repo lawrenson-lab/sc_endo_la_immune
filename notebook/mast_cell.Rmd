@@ -1,0 +1,400 @@
+---
+title: "sc_endo_mc"
+author: "Na Jeong Kim"
+date: '2023-05-18'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(broom)
+library(ggplot2)
+library(dplyr)
+library(reshape)
+#library(clusterProfiler)
+library(readxl)
+library(ggrepel)
+library(clustree)
+library(pheatmap)
+#library(sankeyNetwork)
+```
+
+
+```{r}
+imm_cells <- readRDS("data/Immune_Cell_annotation.rds")
+```
+
+```{r}
+#cluster.cols = c("#67001f", "#a50026", "#d73027", "#f46d43", "#fdae61", "#fee090", "#ffffbf", "#a6dba0", "#1a9850", "#e0f3f8", "#abd9e9")
+
+plot_1 <- DimPlot(object = imm_cells, pt.size = 0.1, group.by ="Immune_Cluster_ID", label = T, raster=FALSE) +
+  theme_classic(base_size = 20) ##this is a umap with the clusters grouped with their cell identity
+
+plot_1
+```
+
+```{r}
+# Pull out mast cell population from imm_cells
+mc <- subset(imm_cells, subset = Immune_Cluster_ID %in% "Mast cells")
+
+```
+
+```{r}
+# Mast cell numbers on surgical classification
+
+prop.cells <- data.frame(table(mc@meta.data$Surgical.classification))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+# Mast cell numbers on Major class
+
+mc@meta.data <- droplevels(mc@meta.data)
+
+prop.cells <- data.frame(table(mc@meta.data$Class))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_classic(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+# Mast cell numbers of LA status
+
+prop.cells <- data.frame(table(mc@meta.data$LA_Status))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+# Mast cell numbers of Hormonal States
+
+prop.cells <- data.frame(table(mc@meta.data$Hormone_status))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+# Mast cell numbers of Menstrual Cycle
+
+prop.cells <- data.frame(table(mc@meta.data$Menstral_cycle))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+# Mast cell numbers of KRAS Mutation
+
+prop.cells <- data.frame(table(mc@meta.data$KRAS_Mut))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+# Mast cell numbers of ARID1A Mutation
+
+prop.cells <- data.frame(table(mc@meta.data$ARID1A_Mut))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+```
+
+```{r}
+#cell proportions by LA tissue activity
+
+mc@meta.data <- droplevels(mc@meta.data)
+counts.prop = data.frame(table(mc@meta.data$LA_Status, mc@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+bsize = 20
+p2 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="LA Group", values = c("High" = "#FC8D59",
+                                                    "Low" = "#91BFDB",
+                                                  "Exclude" = "#8B0000",
+                                                  "NA" = "#2F4F4F")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in LA Status') +
+  theme_classic(base_size = 25)
+
+p2
+
+#cell proportions by Class
+
+mc@meta.data <- droplevels(mc@meta.data)
+counts.prop = data.frame(table(mc@meta.data$Class, mc@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+bsize = 20
+p3 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Class", values = c("Endometrioma" = "#7b3294", 
+                      "Eutopic endometrium" = "#c2a5cf", 
+                      "Peritoneal endometriosis" = "#d9f0d3", 
+                      "Unaffected ovary" = "#008837")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Disease Classes') +
+  theme_classic(base_size = 25)
+
+p3
+
+# cell proportions by menstrual cycle phase (mast cells)
+
+
+mc@meta.data <- droplevels(mc@meta.data)
+
+counts.prop = data.frame(table(mc@meta.data$Menstral_cycle, mc@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p4 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Menstrual cycle", values = c("Follicular" = "orange",
+                                             "Luteal" = "red",
+                                             "Hormone" = "blue")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 25)) +
+  theme(plot.title = element_text(hjust = 0.3),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Menstrual cycle phase')
+
+p4
+```
+
+```{r}
+# cell proportions by menstrual cycle phase (all immune cells)
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data$Menstral_cycle, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+
+p5 <- counts.prop.perc%>%filter(Var2%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Menstrual cycle", values = c("Follicular" = "orange",
+                                             "Luteal" = "red",
+                                             "Hormone" = "blue")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 25)) +
+  theme(plot.title = element_text(hjust = 0.3),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Menstrual cycle phase')
+
+p5
+```
+
+```{r}
+# cell proportions by LA status (total immune cells and mast cells separately)
+
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data$LA_Status, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+
+p6 <- counts.prop.perc%>%filter(Var2%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="LA Group", values = c("High" = "#FC8D59",
+                                                    "Low" = "#91BFDB",
+                                                  "Exclude" = "#8B0000",
+                                                  "NA" = "#2F4F4F")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in LA Status') +
+  theme_classic(base_size = 25)
+
+p6
+
+```
+
+```{r}
+# cell proportions by LA status (total immune cells and mast cells separately)
+
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data$Hormone_status, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+
+p7 <- counts.prop.perc%>%filter(Var2%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Hormonal States", values = c("No" = "#FC8D59",
+                                                    "Yes" = "#91BFDB")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Hormonal states') +
+  theme_classic(base_size = 25)
+
+p7
+
+```
+
+```{r}
+# cell proportions by Mutation  (total immune cells and mast cells separately)
+
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data$Hormone_status, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+
+p7 <- counts.prop.perc%>%filter(Var2%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Hormonal States", values = c("No" = "#FC8D59",
+                                                    "Yes" = "#91BFDB")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Hormonal states') +
+  theme_classic(base_size = 25)
+
+p7
+```
+
+
+```{r}
+# Looking at markers on mast cells in the group of peritoneal endometriosis based on LA status
+
+mc_2 <- subset(mc, subset = Class %in% "Peritoneal endometriosis")
+
+mc_2@meta.data <- droplevels(mc_2@meta.data)
+                            
+DotPlot(mc_2, group.by = "LA_Status", features = c("CD69", "LIF", "NAMPT", "NCL")) + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, color = "black"), axis.text.y = element_text(size = 20, colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+```
+

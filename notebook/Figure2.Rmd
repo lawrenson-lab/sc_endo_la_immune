@@ -546,6 +546,14 @@ Immune.Cells.TrueV2@meta.data %>%
       group_by(Immune_Cluster_ID) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
       print(n=29)
+
+
+
+DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = c("CD3D", "CD3E", "CD3G", "CD8A"), group.by = "Immune_Cluster_ID") + labs(title = "Identifying  cell TrueV2 Sub-cluster by Canonical Markers res0.6") +
+ theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8)) +
+  #coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 ```
 
 

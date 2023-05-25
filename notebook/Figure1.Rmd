@@ -89,9 +89,9 @@ pheatmap(t(table.fc),
 
 #looking at specific receptors and ligans in EnEpi and Central Memory in endometriosis
 ```{r}
-sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% "Endothelial cells")
+sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% "EnS cells")
 
-sel <- subset(sel, subset = Class %in% "Peritoneal endometriosis")
+sel <- subset(sel, subset = Class %in% c("Peritoneal endometriosis", "Endometrioma"))
 
 Immune.markers = read.delim("data/cell_chat_receptor_ligand_filtered.csv", sep = ",")
 head(Immune.markers)
@@ -99,16 +99,20 @@ head(Immune.markers)
 selected.features = unique(as.character(unique(Immune.markers$M2Macs)))
 
 
-DotPlot(sel, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "Ligand Receptor in LA Endothelial cells") +
+DotPlot(sel, assay = "RNA", features = c("IGF1", "THY1", "ANXA1", "C3", "IGF"), group.by = "Class") + labs(title = "Ligand Receptor in CLASS EnS cells") +
  theme_classic(base_size = 25) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour="black"), axis.text.y = element_text(color = "black")) +
   coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 
 
-sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "Macrophages M2")
+sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "Plasma cells")
 
-DotPlot(sel, assay = "RNA", features = selected.features, group.by = "LA_Status") + labs(title = "Ligand Recipient signals from M2 Macrophages") +
+sel <- subset(Immune.Cells.TrueV2, subset = Class %in% c("Peritoneal endometriosis", "Endometrioma"))
+
+sel <- subset(sel, subset = Immune_Cluster_ID %in% "Plasma cells")
+
+DotPlot(sel, assay = "RNA", features = c("IL1B", "NAMPT", "CD69", "GZMA", "HLA-B", "APP", "CLEC2B", "INSR"), group.by = "Class") + labs(title = "Ligand Recipient signals from Activated Plasma cell") +
  theme_classic(base_size = 25) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour="black"), axis.text.y = element_text(colour = "black")) +
   coord_flip() +
@@ -118,10 +122,10 @@ DotPlot(sel, assay = "RNA", features = selected.features, group.by = "LA_Status"
 
 Endometriosis <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal endometriosis")
 
-Idents(Endometriosis) <- "Immune_Cluster_ID"
+Idents(sel) <- "Immune_Cluster_ID"
 
-DotPlot(Endometriosis, assay = "RNA", features = 
-          c("PTGS2"), split.by = "LA_Status", cols= "BrBG") + labs(title = "COX expression in Immune cells in endometriosis") +
+DotPlot(sel, assay = "RNA", features = 
+          c("NAMPT", "CD69", "GZMA", "HLA-B", "APP", "CLEC2B"), split.by = "Class", cols= "BrBG") + labs(title = "COX expression in Immune cells in endometriosis") +
  theme_classic(base_size = 20) #+
   #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8)) +
   #coord_flip() +

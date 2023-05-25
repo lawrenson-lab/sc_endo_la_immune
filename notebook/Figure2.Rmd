@@ -523,23 +523,23 @@ p1
 
 # reorder clusters
 Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID <- factor(Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID, 
-                            levels=c("Central Memory CD8 T-cells (2)", 
-                                     "Th17 T-cells",
-                                     "NK cells", 
-                                     "Bcells", 
-                                     "Central Memory CD8 T-cells (1)", 
-                                     "Effector Memory CD8",
-                                     "Th2 T-cells", 
-                                     "Exhausted CD8 T-cells", 
-                                     "Macrophages M2", 
-                                     "Cytotoxic CD8 T-cells", 
-                                     "Activated CD8 T-cells (1)",
-                                     "Central Memory CD8 T-cells (3)",
-                                     "Macrophage M1/M2",
+                            levels=c("Activated CD8 T-cells (1)",
                                      "Activated CD8 T-cells (2)",
+                                     "Central Memory CD8 T-cells (1)",
+                                     "Central Memory CD8 T-cells (2)", 
+                                     "Central Memory CD8 T-cells (3)",
+                                     "Cytotoxic CD8 T-cells",
+                                     "Effector Memory CD8",
+                                     "Exhausted CD8 T-cells",
+                                     "Th2 T-cells",
+                                     "Th17 T-cells",
+                                     "Bcells",
                                      "Plasma cells",
+                                     "Macrophages M1", 
+                                     "Macrophage M1/M2",
+                                     "Macrophages M2",
                                      "Mast cells",
-                                     "Macrophages M1"))
+                                     "NK cells"))
 
 
 Immune.Cells.TrueV2@meta.data %>% 
@@ -947,12 +947,11 @@ p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
   coord_flip() +
   theme_set(theme_classic(base_size = 30)) +
   theme(plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
-        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.text.x = element_text(angle = 270, hjust = 1, colour="black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour="black"),
         axis.title.x = element_blank(),
         axis.title.y = element_blank()) +
-  ggtitle('Proportion of Immune cells TrueV2 res0.6 in LA Status') +
-  theme_classic(base_size = 25)
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in LA Status')
 
 p1
 
@@ -974,7 +973,7 @@ Endometriosis@meta.data %>%
 
 write_csv(Endometriosis@meta.data,"data/Endometriosis.meta.data.csv")
 
-p1 <- DimPlot(object = Endometriosis, pt.size = 0.1,split.by = "LA_Status", group.by ="Immune_Cluster_ID", label = T, raster=FALSE) +
+p1 <- DimPlot(object = Endometriosis, pt.size = 0.1,split.by = "LA_Status", group.by ="Immune_Cluster_ID", label = F, raster=FALSE) +
   theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
 
 p1

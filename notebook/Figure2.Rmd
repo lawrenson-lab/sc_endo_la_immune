@@ -549,9 +549,9 @@ Immune.Cells.TrueV2@meta.data %>%
 
 
 
-DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = c("CD3D", "CD3E", "CD3G", "CD8A"), group.by = "Immune_Cluster_ID") + labs(title = "Identifying  cell TrueV2 Sub-cluster by Canonical Markers res0.6") +
+DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = c("CD3D", "CD8A", "IL7R", "KLRG1", "GZMB", "PRF1", "PDCD1", "CTLA4", "TIGIT", "CD4", "GATA3","RORC", "IL17A","IL17F", "MS4A1", "CD79A", "CD27", "CD38", "SDC1", "JCHAIN", "CD68", "HLA-DRA", "IL18", "CD163", "IL10", "VEGFA", "KIT", "TPSB2", "FCGR3A", "NCAM1"), group.by = "Immune_Cluster_ID") + labs(title = "Identifying  cell TrueV2 Sub-cluster by Canonical Markers res0.6") +
  theme_classic(base_size = 20) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(colour = "black")) +
   #coord_flip() +
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
 ```

@@ -36,6 +36,66 @@ setwd("/home/harom/Code/sc_endo_la_immune")
 ```
 
 
+
+
+#Stattistics for LA High vs Low
+```{r}
+##stage comparision in Low vs High (not including patient 1 and 2 that have only endometrioma)
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 1)
+counts = table(Metadata.Stats$Group[-c(1:2)], Metadata.Stats$Stage.Group[-c(1:2)])
+Chisq <- chisq.test(counts)
+Chisq
+
+##Low vs High mestral cycle comparision pch = circles, 21= is the type symbol (21 =circle)
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 1)
+counts = table(Metadata.Stats$Group[-c(1:2)], Metadata.Stats$Menstral.Cycle.Phase[-c(1:2)])
+Chisq <- chisq.test(counts)
+Chisq
+
+
+##Low vs High Age comparision 
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 1)
+Metadata.Stats = Metadata.Stats[-c(1:2), c("Group", "Age")]
+
+Low <- c(32, 41, 31)
+High <- c(32, 24, 40, 42, 28, 21, 37, 46, 36)
+
+wilcox.test(Low, High)
+
+p1 <- ggplot(Metadata.Stats, aes(x=as.character(Group), y=Age)) +
+  geom_boxplot(width = 0.5) + 
+  geom_point(pch = 21) +
+  theme_classic(base_size = 20) +
+  theme(axis.text.x=element_text(angle = -45, vjust = 0.5, colour = "black"), axis.text.y = element_text(colour = "black")) +
+  geom_text(x=0.75, y=45, label= "p-value = 1", size = 10)
+  
+p1
+
+
+##Low vs High Deep vs superficial comparision by tissue
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 2)
+counts = table(Metadata.Stats$Group, Metadata.Stats$Deep_superficial)
+Chisq <- chisq.test(counts)
+Chisq
+
+
+
+##Low vs High mutations status comparision by tissue
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 2)
+counts = table(Metadata.Stats$Group[-c(3, 12, 16, 18, 20:22, 28)], Metadata.Stats$ARID1A_Mut[-c(3, 12, 16, 18, 20:22, 28)])
+Chisq <- chisq.test(counts)
+Chisq
+
+
+counts = table(Metadata.Stats$Group[-c(3:4, 6:8, 11:14, 16, 18:23, 28)], Metadata.Stats$KRAS_Mut[-c(3:4, 6:8, 11:14, 16, 18:23, 28)])
+Chisq <- chisq.test(counts)
+Chisq
+
+```
+
+
+
+
 #Immune cells in all the classes
 ```{r}
 #load Immune cells RDS file
@@ -85,6 +145,125 @@ pheatmap(t(table.fc),
          cluster_cols      = F,
          fontsize          = 14)
 ```
+
+
+
+
+#Figure 1A
+```{r}
+#UMAP of major immune cells family groups split bu Class
+
+p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Parent_immune_cluster", split.by = "Class", label = T, raster=FALSE) +
+  theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
+
+p1
+
+
+#numbers of cells in (total immune cell number in each class)
+table(Immune.Cells.TrueV2@meta.data$Class) %>% print
+
+
+```
+
+
+#Figure 1B
+```{r}
+#Proportions of major Immune Cells byt class
+
+Immune.Cells.TrueV2@meta.data <- droplevels(Immune.Cells.TrueV2@meta.data)
+
+counts.prop = data.frame(table(Immune.Cells.TrueV2@meta.data$Class, Immune.Cells.TrueV2@meta.data$Parent_immune_cluster))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Class", values = c("Endometrioma" = "#7b3294", 
+                      "Eutopic endometrium" = "#c2a5cf", 
+                      "Peritoneal endometriosis" = "#d9f0d3", 
+                      "Unaffected ovary" = "#008837")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 25)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in Major class')
+p1
+```
+
+
+
+#Figure 1C
+```{r}
+#Dotplot to show markers for major Immune cells families
+
+DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = c("CD3D", "CD3E", "CD3G", "CD8A", "CD27", "SDC1", "JCHAIN", "KIR2DL4", "NCAM1", "CD14", "LYZ", "CD68", "KIT", "TPSB2", "MS4A1", "CD79A"), group.by = "Parent_immune_cluster") + labs(title = "Identifying  cell TrueV2 Sub-cluster by Canonical Markers res0.6") +
+ theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(colour = "black")) +
+  #coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+```
+
+
+
+#Figure 1D
+```{r}
+#Proportions of Immune Cells groups  by class
+
+Immune.Cells.TrueV2@meta.data <- droplevels(Immune.Cells.TrueV2@meta.data)
+
+counts.prop = data.frame(table(Immune.Cells.TrueV2@meta.data$Class, Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Class", values = c("Endometrioma" = "#7b3294", 
+                      "Eutopic endometrium" = "#c2a5cf", 
+                      "Peritoneal endometriosis" = "#d9f0d3", 
+                      "Unaffected ovary" = "#008837")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 25)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in Major class')
+p1
+```
+
+
+#Figure 1E
+```{r}
+#DotPlot to ID Immune clusters
+
+DotPlot(Immune.Cells.TrueV2, assay = "RNA", features = c("CD3D", "CD8A", "KLRG1", "IL7R", "PRF1", "PDCD1", "CTLA4", "CD4", "GATA3","RORC", "IL17A", "MS4A1", "CD79A", "SDC1", "JCHAIN", "CD68", "CD163", "IL10", "VEGFA", "KIT", "TPSB2", "KIR2DL4", "NCAM1"), group.by = "Immune_Cluster_ID") + labs(title = "Identifying  cell TrueV2 Sub-cluster by Canonical Markers res0.6") +
+ theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour = "black"), axis.text.y = element_text(colour = "black")) +
+  #coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+```
+
+
+
+
 
 
 #looking at specific receptors and ligans in EnEpi and Central Memory in endometriosis

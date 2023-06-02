@@ -521,7 +521,7 @@ p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Immune_Clu
 
 p1
 
-# reorder clusters
+# reorder clusters based on cell type and in alphabetical order
 Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID <- factor(Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID, 
                             levels=c("Activated CD8 T-cells (1)",
                                      "Activated CD8 T-cells (2)",
@@ -932,7 +932,35 @@ p1
 Endometriosis <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal endometriosis")
 
 
-#proportions by LA tissue activity
+#rearrange groups by proportions
+Endometriosis@meta.data$Immune_Cluster_ID <- factor(Endometriosis@meta.data$Immune_Cluster_ID, 
+                            levels=c("Central Memory CD8 T-cells (2)",
+                                     "Th17 T-cells",
+                                     "NK cells",
+                                     "Bcells",
+                                     "Central Memory CD8 T-cells (1)",
+                                     "Effector Memory CD8",
+                                     "Th2 T-cells",
+                                     "Exhausted CD8 T-cells",
+                                     "Macrophages M2",
+                                     "Cytotoxic CD8 T-cells",
+                                     "Activated CD8 T-cells (1)",
+                                     "Central Memory CD8 T-cells (3)",
+                                     "Macrophage M1/M2",
+                                     "Activated CD8 T-cells (2)",
+                                     "Plasma cells",
+                                     "Mast cells",
+                                     "Macrophages M1"))
+
+
+Endometriosis@meta.data %>% 
+      group_by(Immune_Cluster_ID) %>% 
+     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+      print(n=29)
+
+
+
+#proportions by LA status
 Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
 
 counts.prop = data.frame(table(Endometriosis@meta.data$LA_Status, Endometriosis@meta.data$Immune_Cluster_ID))
@@ -1032,6 +1060,90 @@ pheatmap(t(table.fc),
          fontsize          = 14)
 
 ```
+
+
+```{r}
+
+#proportions by stage
+Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
+
+counts.prop = data.frame(table(Endometriosis@meta.data$Stage, Endometriosis@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Stage", values = c("Stage 1" = "#fc8d59", 
+                                                    "Stage 2" = "#91bfdb",
+                                                  "Stage 3" = "#8b0000",
+                                                  "Stage 4" = "#2f4f4f")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, colour="black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour="black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in Stage')
+
+p1
+
+
+
+#Grouping stages into groups
+Endometriosis@meta.data <- Endometriosis@meta.data  %>%
+                    mutate(Stage_Group = case_when( 
+                             Stage %in% c("Stage 1", "Stage 2") ~ "Low", 
+                             Stage %in% c("Stage 3", "Stage 4") ~ "High"))
+
+
+
+Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
+
+counts.prop = data.frame(table(Endometriosis@meta.data$Stage_Group, Endometriosis@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Stage_Group", values = c("High" = "#fc8d59", 
+                                                    "Low" = "#91bfdb")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, colour="black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour="black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in Stage group')
+
+p1
+
+
+
+
+
+
+
+
+```
+
+
+
 
 
 #Endometriosis deep vs superficial

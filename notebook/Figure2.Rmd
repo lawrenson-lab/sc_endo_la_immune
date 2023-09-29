@@ -929,11 +929,11 @@ p1
 
 #pull out just peritoneal endometriosis samples
 ```{r}
-Endometriosis <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal endometriosis")
+Immune.Cell.TrueV2.sel <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal endometriosis")
 
 
 #rearrange groups by proportions
-Endometriosis@meta.data$Immune_Cluster_ID <- factor(Endometriosis@meta.data$Immune_Cluster_ID, 
+Immune.Cell.TrueV2.sel@meta.data$Immune_Cluster_ID <- factor(Immune.Cell.TrueV2.sel@meta.data$Immune_Cluster_ID, 
                             levels=c("Central Memory CD8 T-cells (2)",
                                      "Th17 T-cells",
                                      "NK cells",
@@ -953,7 +953,7 @@ Endometriosis@meta.data$Immune_Cluster_ID <- factor(Endometriosis@meta.data$Immu
                                      "Macrophages M1"))
 
 
-Endometriosis@meta.data %>% 
+Immune.Cell.TrueV2.sel@meta.data %>% 
       group_by(Immune_Cluster_ID) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
       print(n=29)
@@ -961,9 +961,9 @@ Endometriosis@meta.data %>%
 
 
 #proportions by LA status
-Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
+Immune.Cell.TrueV2.sel@meta.data <- droplevels(Immune.Cell.TrueV2.sel@meta.data)
 
-counts.prop = data.frame(table(Endometriosis@meta.data$LA_Status, Endometriosis@meta.data$Immune_Cluster_ID))
+counts.prop = data.frame(table(Immune.Cell.TrueV2.sel@meta.data$LA_Status, Immune.Cell.TrueV2.sel@meta.data$Immune_Cluster_ID))
 counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
 head(counts.prop.perc)
 aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
@@ -1002,12 +1002,12 @@ test <- chisq.test(table.counts)
 pheatmap(test$residuals, treeheight_row=0,treeheight_col=0,cellwidth=25)
 
 
-Endometriosis@meta.data %>% 
+Immune.Cell.TrueV2.sel@meta.data %>% 
       group_by(Immune_Cluster_ID %>% as.character()) %>% 
      summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
       print(n=18)
 
-write_csv(Endometriosis@meta.data,"data/Endometriosis.meta.data.csv")
+write_csv(Immune.Cell.TrueV2.sel@meta.data,"data/Endometriosis.meta.data.csv")
 
 p1 <- DimPlot(object = Endometriosis, pt.size = 0.1,split.by = "LA_Status", group.by ="Immune_Cluster_ID", label = F, raster=FALSE) +
   theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
@@ -1019,10 +1019,10 @@ markers <- FindAllMarkers(Immune.Cells.TrueV2, only.pos = TRUE, min.pct = 0.25, 
 
 
 #get fold change for Immunce clusters
-table.class.cell = table(Endometriosis@meta.data$Immune_Cluster_ID, Endometriosis@meta.data$LA_Status)
+table.class.cell = table(Immune.Cells.TrueV2_sel@meta.data$Immune_Cluster_ID, Immune.Cell.TrueV2.sel@meta.data$LA_Status)
 table.class.cell.perc = table.class.cell/rowSums(table.class.cell)
 
-obs.class.perc = table(Endometriosis@meta.data$LA_Status)/length(Endometriosis@meta.data$LA_Status) #expected proportion of high and low in entire data
+obs.class.perc = table(Immune.Cell.TrueV2.sel@meta.data$LA_Status)/length(Immune.Cell.TrueV2.sel@meta.data$LA_Status) #expected proportion of high and low in entire data
 table.fc = table.class.cell
 table.fc = is.na(table.fc)
 
@@ -1065,9 +1065,9 @@ pheatmap(t(table.fc),
 ```{r}
 
 #proportions by stage
-Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
+Immune.Cell.TrueV2.sel@meta.data <- droplevels(Immune.Cell.TrueV2.sel@meta.data)
 
-counts.prop = data.frame(table(Endometriosis@meta.data$Stage, Endometriosis@meta.data$Immune_Cluster_ID))
+counts.prop = data.frame(table(Immune.Cells.TrueV2_sel@meta.data$Stage, Immune.Cell.TrueV2.sel@meta.data$Immune_Cluster_ID))
 counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
 head(counts.prop.perc)
 aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
@@ -1098,16 +1098,16 @@ p1
 
 
 #Grouping stages into groups
-Endometriosis@meta.data <- Endometriosis@meta.data  %>%
+Immune.Cell.TrueV2.sel@meta.data <- Immune.Cell.TrueV2.sel@meta.data  %>%
                     mutate(Stage_Group = case_when( 
                              Stage %in% c("Stage 1", "Stage 2") ~ "Low", 
                              Stage %in% c("Stage 3", "Stage 4") ~ "High"))
 
 
 
-Endometriosis@meta.data <- droplevels(Endometriosis@meta.data)
+Immune.Cell.TrueV2.sel@meta.data <- droplevels(Immune.Cell.TrueV2.sel@meta.data)
 
-counts.prop = data.frame(table(Endometriosis@meta.data$Stage_Group, Endometriosis@meta.data$Immune_Cluster_ID))
+counts.prop = data.frame(table(Immune.Cell.TrueV2.sel@meta.data$Stage_Group, Immune.Cell.TrueV2.sel@meta.data$Immune_Cluster_ID))
 counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
 head(counts.prop.perc)
 aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
@@ -1143,12 +1143,9 @@ p1
 ```
 
 
-
-
-
 #Endometriosis deep vs superficial
 ```{r}
-Endometriosis_Deep_Sup <- subset(Endometriosis, subset = Deep_Superficial %in% c("Superficial", "Deep"))
+Endometriosis_Deep_Sup <- subset(Immune.Cell.TrueV2.sel, subset = Deep_Superficial %in% c("Superficial", "Deep"))
 
 Endometriosis_Deep_Sup@meta.data <- droplevels(Endometriosis_Deep_Sup@meta.data)
 
@@ -1197,7 +1194,7 @@ pheatmap(test$residuals,treeheight_row=0,treeheight_col=0,cellwidth=25)
 
 #NK cell analysils
 ```{r}
-Endometriosis_sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "NK cells")
+Endometriosis_sel <- subset(Immune.Cell.TrueV2.sel, subset = Immune_Cluster_ID %in% "NK cells")
 
 #Immune markers to identify immune cells
 Immune.markers = read.delim("data/NK_receptors.csv", sep = ",")
@@ -1240,7 +1237,7 @@ p1
 
 #Macs analysis
 ```{r}
-Endometriosis_sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% c("Macrophage M1/M2", "Macrophages M1", "Macrophages Me"))
+Endometriosis_sel <- subset(Immune.Cell.TrueV2.sel, subset = Immune_Cluster_ID %in% c("Macrophage M1/M2", "Macrophages M1", "Macrophages Me"))
 
 #Immune markers to identify immune cells
 Immune.markers = read.delim("data/M1_vs_M2.csv", sep = ",")
@@ -1266,7 +1263,7 @@ p1
 
 #Bcells analysis
 ```{r}
-Endometriosis_sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% c("Bcells", "Plasma cells"))
+Endometriosis_sel <- subset(Immune.Cell.TrueV2.sel, subset = Immune_Cluster_ID %in% c("Bcells", "Plasma cells"))
 
 #Immune markers to identify immune cells
 Immune.markers = read.delim("data/Bcells_PlasmaCell_Markers.csv", sep = ",")
@@ -1314,7 +1311,7 @@ Annotation_tracker$Epi_Data
 
 
 ```{r}
-immue_endo_t<- Endometriosis@meta.data %>%
+immue_endo_t<- Immune.Cell.TrueV2.sel@meta.data %>%
                   #filter(LA_Status == c("High", "Low")) %>%
                   #filter(Master_Assigned_Cell_Type) %>%
                   #filter(! is.na(Number_of_lymphoid_aggregates)) %>%
@@ -1323,7 +1320,7 @@ immue_endo_t<- Endometriosis@meta.data %>%
                   summarise(count=n()) %>%
                   mutate(prop= count/sum(count)*100)
 
-anno_df <- Endometriosis@meta.data  %>%
+anno_df <- Immune.Cell.TrueV2.sel@meta.data  %>%
            rownames_to_column() %>%
            dplyr::select(-rowname) %>%
            #left_join(Annotation_tracker$Epi_Data, by=c("Patient.No."="Patient_ID")) %>%

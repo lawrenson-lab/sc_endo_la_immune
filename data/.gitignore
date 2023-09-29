@@ -21,6 +21,9 @@
 !cell_chat_endo_DE_pairs.csv
 !Atlas_epithelial_Mesenchymal_Markers.csv
 !Unknown_cells_metadata.csv
+!Nonimmune_cluster_metadata.csv
+!Immune_Clusters_Metadata.csv
 !cell_chat_receptor_ligand_filterd.csv
 !LA_Supp_organization.xlsx
+!Endometrioma_vs_Endometriosis_PlasmablastDE.csv 
 !.gitignore

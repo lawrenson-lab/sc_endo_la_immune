@@ -19,6 +19,8 @@ Plasma_cell,PRDM1
 ,IGHD
 ,IGHM
 ,IGHG1
+,IGHG4
+,IGHA1
 T_cells,CD3D
 T_cells,CD3E
 T_cells,CD3G

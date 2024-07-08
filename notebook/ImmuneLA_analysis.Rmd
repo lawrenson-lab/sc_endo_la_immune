@@ -43,7 +43,7 @@ library(sankeyNetwork)
 #Loading the scRNAseq data and loading into seurat object
 ```{r}
 #reading the Seurat object RDS file
-d10x.seurat <- readRDS("data/fixed_annotated_aux.seurat.rds")
+d10x.seurat <- readRDS("/media/Data04/private_data/fixed_annotated_aux.seurat.rds")
 ```
 
 
@@ -102,7 +102,7 @@ p1
 #p1
 #dev.off()
 
-FeaturePlot(d10x.seurat, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM", "CD274", "PDCD1LG2")) +
+FeaturePlot(d10x.seurat, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM", "CD274", "PDCD1LG2"), raster = FALSE) +
   theme_classic(base_size = 20)
 
 ```
@@ -130,7 +130,7 @@ p1 <- DimPlot(Immune.cells.subclustering, reduction = "umap", label =  TRUE, ras
 
 p1
 
-FeaturePlot(Immune.cells.subclustering, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM")) +
+FeaturePlot(Immune.cells.subclustering, features = c("KIT", "GNLY", "CD3D", "LYZ", "CD79A", "GZMB", "ACTA2", "DCN", "KRT18", "COL1A1", "EPCAM"), raster = FALSE) +
   theme_classic(base_size = 20)
 
 #removing levels that are empty (only keeping the values in the vectors I want) and getting the numb tisseue, n_patient, and n_cells

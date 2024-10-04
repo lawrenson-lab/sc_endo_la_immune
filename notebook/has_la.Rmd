@@ -1,0 +1,164 @@
+---
+title: "Figure something"
+---
+
+
+```{r}
+library(htmltools)#otherwise seurat dies, to fix
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(ggplot2)
+library(speckle)
+library(limma)
+library(ggpubr)
+library(clusterProfiler)
+library(msigdbr)
+
+sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
+aux_table<-sc@meta.data
+```
+
+#   Cell composition contrast
+## per class
+```{r}
+composition<-aux_table%>%
+  count(Class,harmonized_major_plus_immune_cell_type,SampleName,Patient.No.,Menstral_cycle,Stage.y,
+        name = "cell_n")%>%
+  group_by(SampleName)%>%
+  mutate(total=sum(cell_n),prop=100*cell_n/total)
+composition<-composition%>%mutate(Stage.y=replace_na(Stage.y,"0")%>%str_replace("NA","0"))
+
+#simple model
+temp<-propeller(clusters=aux_table$harmonized_major_plus_immune_cell_type,
+          sample=aux_table$SampleName,
+          group=aux_table$Class,
+          trans="asin")#more strict than logit(default)
+#complex model
+props<-getTransformedProps(aux_table$harmonized_major_plus_immune_cell_type,
+                           aux_table$SampleName)
+designM<-model.matrix(~0+Class#+Stage.y+Menstral_cycle,
+                      #data=composition%>%distinct(Menstral_cycle,Stage.y,Class,SampleName))#groups around replicates=samplename
+                      data=composition%>%distinct(Class,SampleName))#groups around replicates=samplename
+colnames(designM)<-str_replace(colnames(designM)," ","_")
+fit<-lmFit(props$TransformedProps,designM)
+cont<-makeContrasts(ClassEndometrioma-ClassUnaffected_ovary,
+                    ClassEndometrioma-ClassPeritoneal_endometriosis,
+                    ClassPeritoneal_endometriosis-ClassEutopic_endometrium,levels = designM)
+fit<-contrasts.fit(fit,cont)
+fit <- eBayes(fit, robust=TRUE)
+temp<-lapply(1:3,function(x)
+  topTable(fit,number = nrow(props$TransformedProps),coef = x))
+names(temp)<-str_replace(colnames(cont)," - ","_")
+temp<-lapply(names(temp), function(x) 
+  temp[[x]]%>%mutate(contrast=x)%>%rownames_to_column("cell_type"))%>%bind_rows()
+
+temp%>%ggplot(aes(x=contrast,y=cell_type,col=logFC,size=adj.P.Val))+
+  geom_point()+scale_size(range=c(8,1),breaks = c(0.5,0.05))+
+  scale_color_gradient2(low = "blue",high = "red")+
+  theme_classic(base_size = 14)+
+  theme(axis.text.x = element_text(angle = 45,vjust = 1,hjust = 1))
+
+composition<-composition%>%group_by(Class)%>%mutate(cell_n=sum(cell_n))%>%split(composition$Class)%>%lapply(function(x) x[1,])%>%bind_rows()%>%mutate(harmonized_major_plus_immune_cell_type="Total")
+
+plot_grid(p0,p1,align = 'h')
+```
+## per LA status
+### scatterplot
+```{r}
+aux_la<-read_tsv("data/LA_counts.tsv")#from LA_bioinfo:Marcela
+colnames(aux_la)[1:2]<-c("LA_patient","LA_sample")
+aux_table<-aux_table%>%
+  filter(Class=="Peritoneal endometriosis")%>%
+  left_join(aux_la,by = "SampleName")
+
+temp<-composition%>%inner_join(aux_la,by = "SampleName")%>%
+  mutate(has_LA=LA_sample>0)
+temp%>%filter(Class=="Peritoneal endometriosis")%>%
+  ggplot(aes(x=prop,y=LA_sample))+geom_point()+
+  facet_wrap(~harmonized_major_plus_immune_cell_type,scales = "free")
+```
+### speckle
+```{r}
+props<-getTransformedProps(aux_table$harmonized_major_plus_immune_cell_type,
+                           aux_table$SampleName)
+designM<-model.matrix(~0+has_LA,data=temp%>%distinct(has_LA,SampleName))#groups around 
+fit<-lmFit(props$TransformedProps,designM)
+cont<-makeContrasts(has_LATRUE-has_LAFALSE,levels = designM)
+fit<-contrasts.fit(fit,cont)
+fit <- eBayes(fit, robust=TRUE)
+
+res<-topTable(fit,number = nrow(props$TransformedProps),coef = 1)
+res<-aux_table%>%group_by(harmonized_major_plus_immune_cell_type)%>%summarise(cell_n=n())%>%right_join(res%>%rownames_to_column("harmonized_major_plus_immune_cell_type"),by="harmonized_major_plus_immune_cell_type")
+
+p1<-res%>%arrange(cell_n)%>%
+  mutate(harmonized_major_plus_immune_cell_type=factor(harmonized_major_plus_immune_cell_type,
+                                                       levels=harmonized_major_plus_immune_cell_type))%>%
+  ggplot(aes(x=cell_n,y=harmonized_major_plus_immune_cell_type,fill=logFC,size=adj.P.Val))+
+    geom_point(shape=21)+scale_size(range=c(8,1),breaks = c(0.5,0.05))+
+    scale_fill_gradient2(low = "blue",high = "red")+
+    theme_classic(base_size = 14)+ggtitle("LA - non LA")+scale_x_continuous(trans="log10")
+
+p0<-composition%>%ggplot(aes(x=cell_n,y=has_LA,fill=harmonized_major_plus_immune_cell_type))+geom_bar(stat="identity",position = "fill")+scale_fill_manual(values = unique(c(cluster.cols,kelly.colours)))
+```
+### cor
+```{r}
+temp<-temp%>%select(SampleName,harmonized_major_plus_immune_cell_type,LA_sample,prop,cell_n)%>%group_by(harmonized_major_plus_immune_cell_type)%>%summarise(cor=cor.test(LA_sample,prop)$estimate,pval=cor.test(LA_sample,prop)$p.value,cell_n=sum(cell_n))
+
+temp%>%arrange(cell_n)%>%mutate(harmonized_major_plus_immune_cell_type=factor(harmonized_major_plus_immune_cell_type,levels=harmonized_major_plus_immune_cell_type))%>%ggplot(aes(x=cell_n,y=harmonized_major_plus_immune_cell_type,fill=cor,size=pval))+geom_point(shape=21)+scale_size(range=c(8,1),breaks = c(0.5,0.05))+scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+scale_x_continuous(trans="log10")
+```
+
+# Progeny
+```{r}
+progeny<-data.table::fread("data/progeney_scores.tsv")
+la_aux<-read_tsv("data/LA_aux.tsv")
+colnames(la_aux)[2]<-"LA_perSample"
+
+la_aux<-la_aux%>%select(LA_perSample,SampleName)%>%
+  right_join(aux_table%>%select(barcode,harmonized_major_plus_immune_cell_type,Class,SampleName),
+             by="SampleName")
+la_aux<-la_aux%>%left_join(progeny,by=c("barcode"="Cell"))
+la_auxPE<-la_aux%>%filter(Class=="Peritoneal endometriosis")
+la_auxPE<-la_auxPE%>%mutate(has_LA=LA_perSample>0)%>%pivot_longer(Androgen:WNT,names_to = "pathway",values_to = "activity")
+la_auxPE%>%ggplot(aes(x=has_LA,y=activity))+geom_violin()+geom_jitter(position=position_jitter(width=0.1, height=0))+facet_wrap(~pathway)+stat_compare_means(label = 'p')
+
+enepi<-aux_table%>%filter(!is.na(published_epithelial_subtype)&epithelial_subcluster_type=="EnEpi cells")%>%select(barcode)%>%unlist()
+ens<-aux_table%>%filter(!is.na(published_mesenchymal_subtype)&mesenchymal_subcluster_type=="EnS cells")%>%select(barcode)%>%unlist()
+mesen<-la_auxPE%>%filter(harmonized_major_cell_type=="Mesenchymal cells"&!barcode%in%c(enepi,ens))%>%select(barcode)%>%unlist()
+
+la_auxPE%>%filter(barcode%in%enepi)%>%ggplot(aes(x=has_LA,y=activity))+geom_violin()+geom_jitter(position=position_jitter(width=0.05, height=0))+facet_wrap(~pathway)+stat_compare_means(label = 'p')+ggtitle("EnEpi cells")
+```
+
+# DEA
+```{r}
+sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"))
+la_aux<-read_tsv("data/LA_aux.tsv")
+la_aux<-sc@meta.data%>%rownames_to_column("barcode")%>%select(barcode,SampleName)%>%left_join(la_aux,by="SampleName")%>%mutate(has_LA=LA_perSample>0)
+sc<-AddMetaData(sc,metadata = la_aux%>%select(barcode,has_LA),col.name = "has_LA")
+Idents(sc)<-sc$has_LA
+
+ens<-subset(sc,cells = ens)
+enepi<-subset(sc,cells = enepi)
+mesen<-subset(sc,cells = mesen)
+deg<-lapply(list(ens,enepi,mesen), function(x) 
+  FindMarkers(x,ident.1 = "TRUE",ident.2 = "FALSE",test.use="MAST"))
+
+deg<-lapply(names(deg),function(x) deg[[x]]%>%rownames_to_column("gene")%>%mutate(cell_type=x))%>%bind_rows()
+write_tsv(deg,"has_laDEG.csv")
+
+deg<-deg%>%mutate(STATUS=case_when(avg_log2FC<=-2.5&p_val_adj<0.01~"Down",avg_log2FC>2.5&p_val_adj<0.01~"Up",TRUE~"NOT.SIG"))
+
+p2<-deg%>%filter(cell_type=="mesen")%>%ggplot(aes(x=avg_log2FC,y=-log10(p_val_adj),col=STATUS))+geom_point()+ggtitle("Mesenchymal cells, p_val: 0.01, LFC: 2.5, Down: 42, Up: 7")+geom_text_repel(data=deg%>%filter(cell_type=="mesen"&STATUS!="NOT.SIG")%>%slice_max(abs(avg_log2FC),n=10),aes(x=avg_log2FC,y=-log10(p_val_adj),col=STATUS,label=gene),show.legend = F)+theme_classic(base_size = 14)+theme(legend.position = "bottom")
+
+
+m_df <- msigdbr(species = "Homo sapiens")%>%
+    filter(str_detect(gs_name,"REACTOME"))%>%
+    distinct(gs_name,gene_symbol)
+temp<-deg%>%filter(p_val_adj<0.01 & abs(avg_log2FC)>2.5)%>%
+  mutate(STATUS=ifelse(avg_log2FC<0,"Down","Up"))%>%
+  unite("cluster",cell_type:STATUS,remove = F)
+oraRes<-temp%>%split(temp$cluster)%>%lapply(function(x) enricher(x$gene,TERM2GENE = m_df))
+oraRes<-lapply(names(oraRes),function(x) 
+  oraRes[[x]]%>%as.data.frame()%>%mutate(cluster=x))%>%bind_rows()
+oraRes%>%separate(cluster,into = c("cell_type","STATUS"),remove = F)%>%ggplot(aes(x=cell_type,y=str_remove(ID,"REACTOME_"),col=p.adjust,fill=p.adjust,size=Count,shape=STATUS))+geom_point()+scale_shape_manual(values=24:25)+labs(x="",y="")+theme_classic(base_size = 14)
+```

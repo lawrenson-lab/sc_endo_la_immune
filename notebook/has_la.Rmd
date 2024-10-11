@@ -15,6 +15,9 @@ library(ggpubr)
 library(clusterProfiler)
 library(msigdbr)
 
+kelly.colours <- c("gray95", "gray13", "gold2", "plum4", "darkorange1", "lightskyblue2", "firebrick", "burlywood3", "gray51", "springgreen4", "lightpink2", "deepskyblue4", "lightsalmon2", "mediumpurple4", "orange", "maroon", "yellow3", "brown4", "yellow4", "sienna4", "chocolate", "gray19")
+cluster.cols = c("#8DB600", "#d53e48", "#f46d43", "#fdae61", "#ffffbf", "#e6f598", "#abdda4", "#66c2a5", "#3288bd",'#9e0142', '#604E97', '#E25822','#008856', '#BE0032', '#0067A5')
+
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 aux_table<-sc@meta.data
 ```
@@ -39,7 +42,7 @@ props<-getTransformedProps(aux_table$harmonized_major_plus_immune_cell_type,
                            aux_table$SampleName)
 designM<-model.matrix(~0+Class#+Stage.y+Menstral_cycle,
                       #data=composition%>%distinct(Menstral_cycle,Stage.y,Class,SampleName))#groups around replicates=samplename
-                      data=composition%>%distinct(Class,SampleName))#groups around replicates=samplename
+                      data=aux_table%>%distinct(Class,SampleName))#groups around replicates=samplename
 colnames(designM)<-str_replace(colnames(designM)," ","_")
 fit<-lmFit(props$TransformedProps,designM)
 cont<-makeContrasts(ClassEndometrioma-ClassUnaffected_ovary,
@@ -59,14 +62,20 @@ temp%>%ggplot(aes(x=contrast,y=cell_type,col=logFC,size=adj.P.Val))+
   theme_classic(base_size = 14)+
   theme(axis.text.x = element_text(angle = 45,vjust = 1,hjust = 1))
 
-composition<-composition%>%group_by(Class)%>%mutate(cell_n=sum(cell_n))%>%split(composition$Class)%>%lapply(function(x) x[1,])%>%bind_rows()%>%mutate(harmonized_major_plus_immune_cell_type="Total")
+plot_df<-aux_table%>%count(Class,harmonized_major_plus_immune_cell_type,name = "cell_n")
+plot_df<-plot_df%>%group_by(harmonized_major_plus_immune_cell_type)%>%summarise(cell_n=sum(cell_n),Class="Total")%>%bind_rows(plot_df)
+plot_df<-plot_df%>%filter(harmonized_major_plus_immune_cell_type!="Exclude")%>%mutate(harmonized_major_plus_immune_cell_type=str_replace(harmonized_major_plus_immune_cell_type,"mm","m"))
+p0<-plot_df%>%ggplot(aes(x=Class,y=cell_n,fill=harmonized_major_plus_immune_cell_type))+geom_bar(stat="identity",position = "fill")+scale_fill_manual(values = unique(c(cluster.cols,kelly.colours)))+labs(x="",y='proportion',fill="")+theme_classic(base_size = 14)+theme(axis.text.x = element_text(angle = 45,vjust = 1,hjust = 1))
 
-plot_grid(p0,p1,align = 'h')
+p1<-res%>%arrange(logFC)%>%mutate(cell_type=factor(cell_type,levels=cell_type))%>%ggplot(aes(x=logFC,y=cell_type,fill=logFC,size=adj.P.Val))+geom_point(shape=21)+scale_size(range=c(8,1),breaks = c(0.5,0.05))+scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+theme_classic(base_size = 14)
+
+part1<-plot_grid(p0+theme(legend.position = "none"),p1,rel_widths = c(.3,.7),align = 'h')
+plot_grid(part1,get_legend(p0+guides(fill=guide_legend(ncol =1))),rel_widths = c(.8,.2))
 ```
 ## per LA status
 ### scatterplot
 ```{r}
-aux_la<-read_tsv("data/LA_counts.tsv")#from LA_bioinfo:Marcela
+aux_la<-read_tsv("data/LA_aux.tsv")#from LA_bioinfo:Marcela
 colnames(aux_la)[1:2]<-c("LA_patient","LA_sample")
 aux_table<-aux_table%>%
   filter(Class=="Peritoneal endometriosis")%>%
@@ -80,26 +89,27 @@ temp%>%filter(Class=="Peritoneal endometriosis")%>%
 ```
 ### speckle
 ```{r}
+temp<-aux_table%>%distinct(has_LA,SampleName)
 props<-getTransformedProps(aux_table$harmonized_major_plus_immune_cell_type,
                            aux_table$SampleName)
-designM<-model.matrix(~0+has_LA,data=temp%>%distinct(has_LA,SampleName))#groups around 
+designM<-model.matrix(~0+has_LA,data=temp)#groups around 
+
+props<-props$TransformedProps[,temp$SampleName]
 fit<-lmFit(props$TransformedProps,designM)
 cont<-makeContrasts(has_LATRUE-has_LAFALSE,levels = designM)
 fit<-contrasts.fit(fit,cont)
 fit <- eBayes(fit, robust=TRUE)
 
-res<-topTable(fit,number = nrow(props$TransformedProps),coef = 1)
-res<-aux_table%>%group_by(harmonized_major_plus_immune_cell_type)%>%summarise(cell_n=n())%>%right_join(res%>%rownames_to_column("harmonized_major_plus_immune_cell_type"),by="harmonized_major_plus_immune_cell_type")
+res<-topTable(fit,number = nrow(props),coef = 1)
+p1<-res%>%arrange(logFC)%>%rownames_to_column("cell_type")%>%filter(cell_type!="Exclude")%>%mutate(cell_type=factor(cell_type,levels=cell_type))%>%ggplot(aes(x=logFC,y=cell_type,fill=logFC,size=adj.P.Val))+geom_point(shape=21)+scale_size(range=c(8,1),breaks = c(0.5,0.05))+scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+theme_classic(base_size = 14)+ggtitle("LA - no LA")
 
-p1<-res%>%arrange(cell_n)%>%
-  mutate(harmonized_major_plus_immune_cell_type=factor(harmonized_major_plus_immune_cell_type,
-                                                       levels=harmonized_major_plus_immune_cell_type))%>%
-  ggplot(aes(x=cell_n,y=harmonized_major_plus_immune_cell_type,fill=logFC,size=adj.P.Val))+
-    geom_point(shape=21)+scale_size(range=c(8,1),breaks = c(0.5,0.05))+
-    scale_fill_gradient2(low = "blue",high = "red")+
-    theme_classic(base_size = 14)+ggtitle("LA - non LA")+scale_x_continuous(trans="log10")
+temp<-aux_table%>%count(has_LA,harmonized_major_plus_immune_cell_type,SampleName,name = "cell_n")%>%
+    group_by(SampleName)%>%
+    mutate(total=sum(cell_n),prop=100*cell_n/total)
+temp<-temp%>%group_by(harmonized_major_plus_immune_cell_type)%>%summarise(cell_n=sum(cell_n),has_LA="Total")%>%bind_rows(temp%>%mutate(has_LA=as.character(has_LA)))
 
-p0<-composition%>%ggplot(aes(x=cell_n,y=has_LA,fill=harmonized_major_plus_immune_cell_type))+geom_bar(stat="identity",position = "fill")+scale_fill_manual(values = unique(c(cluster.cols,kelly.colours)))
+p0<-temp%>%ggplot(aes(y=cell_n,x=has_LA,fill=harmonized_major_plus_immune_cell_type))+geom_bar(stat="identity",position = "fill")+scale_fill_manual(values=unique(c(kelly.colours,cluster.cols)))
+
 ```
 ### cor
 ```{r}

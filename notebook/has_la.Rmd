@@ -111,6 +111,38 @@ temp<-temp%>%group_by(harmonized_major_plus_immune_cell_type)%>%summarise(cell_n
 p0<-temp%>%ggplot(aes(y=cell_n,x=has_LA,fill=harmonized_major_plus_immune_cell_type))+geom_bar(stat="identity",position = "fill")+scale_fill_manual(values=unique(c(kelly.colours,cluster.cols)))
 
 ```
+
+# barplot LA vs no
+```{r}
+temp<-aux_table%>%
+  filter(str_detect(Final_Immune_Cluster_ID,"T-cells"))%>%
+  count(has_LA,Final_Immune_Cluster_ID)
+temp<-temp%>%
+  group_by(Final_Immune_Cluster_ID)%>%
+  mutate(total=sum(n),prop=round(100*n/total,2))
+i<-temp%>%
+  filter(has_LA==TRUE)%>%arrange(prop)%>%
+  select(Final_Immune_Cluster_ID)%>%
+  unlist()
+temp<-temp%>%group_by(has_LA)%>%summarise(n=sum(n),
+                                          total=25240+20806,
+                                          prop=round(100*n/total,2),
+                                          Final_Immune_Cluster_ID="Total")%>%bind_rows(temp)
+temp<-temp%>%
+  mutate(Final_Immune_Cluster_ID=factor(Final_Immune_Cluster_ID,levels=c(i,"Total")))
+
+p0<-temp%>%ggplot(aes(y = Final_Immune_Cluster_ID, x = prop, fill = has_LA, label = prop)) + 
+    geom_bar(position="stack",stat = "identity", width=0.8) +
+    geom_text(position = position_stack(vjust = 0.5), size = 4) +
+    theme_classic(base_size = 14)+labs(x='%',y="")+theme(axis.line.y = element_blank(),axis.ticks.y = element_blank())
+p1<-temp%>%group_by(Final_Immune_Cluster_ID)%>%summarise(n=sum(n))%>%
+  mutate(n=ifelse(Final_Immune_Cluster_ID=="Total",0,n))%>%
+  ggplot(aes(x=n,y=Final_Immune_Cluster_ID))+geom_col()+theme_classic(base_size = 14)+
+  theme(axis.text.y =element_blank(),axis.line.y = element_blank(),axis.ticks.y = element_blank() )+labs(y="")
+p0<-plot_grid(p0+theme(legend.position = "none"),p1,get_legend(p0),align = 'h',axis = "tblr",rel_widths = c(.6,.3,.1),ncol = 3)
+
+```
+
 ### cor
 ```{r}
 temp<-temp%>%select(SampleName,harmonized_major_plus_immune_cell_type,LA_sample,prop,cell_n)%>%group_by(harmonized_major_plus_immune_cell_type)%>%summarise(cor=cor.test(LA_sample,prop)$estimate,pval=cor.test(LA_sample,prop)$p.value,cell_n=sum(cell_n))
@@ -171,4 +203,24 @@ oraRes<-temp%>%split(temp$cluster)%>%lapply(function(x) enricher(x$gene,TERM2GEN
 oraRes<-lapply(names(oraRes),function(x) 
   oraRes[[x]]%>%as.data.frame()%>%mutate(cluster=x))%>%bind_rows()
 oraRes%>%separate(cluster,into = c("cell_type","STATUS"),remove = F)%>%ggplot(aes(x=cell_type,y=str_remove(ID,"REACTOME_"),col=p.adjust,fill=p.adjust,size=Count,shape=STATUS))+geom_point()+scale_shape_manual(values=24:25)+labs(x="",y="")+theme_classic(base_size = 14)
+```
+# Dotplot groups DEG
+```{r}
+tcells<-subset(sc,cells = which(str_detect(sc$Final_Immune_Cluster_ID,"T-cells")))
+tlabels<-unique(tcells$Final_Immune_Cluster_ID)
+tcells<-lapply(tlabels, function(x) subset(tcells,cells=which(tcells$Final_Immune_Cluster_ID==x)))
+tcellDEG<-lapply(tcells, function(x) FindMarkers(x,ident.1 = "TRUE",ident.2 = "FALSE",test.use="MAST"))
+
+file<-list.files("docs",full.names = T)
+file<-file[str_detect(file,"chemo|inter|tnf|comple|")]
+groups<-lapply(file,function(x) read_csv(x,skip=1))
+names(groups)<-str_remove_all(file,"docs/|.csv")
+groups<-lapply(names(groups), function(x) groups[[x]]%>%mutate(group=x))%>%bind_rows()
+
+i<-tcellsDEG%>%inner_join(groups,by=c("gene"="Approved symbol"))%>%filter(p_val_adj<0.05)
+i<-i%>%distinct(group,gene)%>%deframe()
+i<-i[order(names(i))]
+
+mesen<-subset(sc,cells = which(!is.na(sc$published_epithelial_subtype)&sc$harmonized_major_cell_type=="Mesenchymal cells"))
+
 ```

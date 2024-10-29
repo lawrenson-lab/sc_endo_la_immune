@@ -1,0 +1,41 @@
+---
+title: "LA+ vs LA- CellChat"
+---
+
+
+```{r}
+library(CellChat)
+library(tidyverse)
+library(ggplot2)
+library(cowplot)
+
+cc_res<-readRDS("data/CellChat_PE_hasLA_exclude.rds")
+```
+
+
+```{r}
+#heatmap
+netVisual_heatmap(cc_res[[1]])
+#scatterplot
+cc_res$`FALSE`<-netAnalysis_computeCentrality(cc_res$`FALSE`)
+cc_res$`TRUE`<-netAnalysis_computeCentrality(cc_res$`TRUE`)
+netAnalysis_diff_signalingRole_scatter(cc_res[-1])
+#scatter per cell type
+i<-c("B-cells","EnEpi cells","EnS cells","Mast cells","Th17 T-cells")
+plots<-lapply(i, function(x) netAnalysis_signalingChanges_scatter(cc_res[-1], idents.use = x))
+ggsave("temp.png",width = 20,height = 10,plot = patchwork::wrap_plots(plots))#doesn't fit elsewhere
+#pathway summary
+rankNet(cc_res[[1]], mode = "comparison", measure = "weight", sources.use = NULL, targets.use = NULL, stacked = T, do.stat = TRUE)
+#check specific pathways
+plotGeneExpression(cc_res[[1]], signaling = "CD99", split.by = "datasets", type = "violin")
+#check specific pairs
+netVisual_bubble(cc_res[[1]], sources.use = c("EnS cells","EnEpi cells"), targets.use = c("Plasmablast/Plasma cells","Macrophages M2"),  comparison = c(1, 2), angle.x = 45)
+
+
+obj1 <- cc_res[[1]]@net$`FALSE`[["count"]]
+obj2 <- cc_res[[1]]@net$`TRUE`[["count"]]
+net.diff <- obj2 - obj1
+
+
+
+```c

@@ -24,8 +24,10 @@ library(readxl)
 library(ggplot2)
 library(gdata)
 library(ggbeeswarm)
+library(ggrepel)
 library(beeswarm)
 library(pheatmap)
+library(MAST)
 ```
 
 
@@ -39,7 +41,7 @@ setwd("/home/harom/Code/sc_endo_la_immune")
 #Immune cells in all the classes
 ```{r}
 #load Immune cells RDS file
-Immune.Cells.TrueV2<- readRDS("data/Immune_Cell_annotation.rds")
+Immune.Cells.TrueV2<- readRDS("data/fixed_annotated_aux.seurat.rds")
 ```
 
 
@@ -92,29 +94,13 @@ pheatmap(t(table.fc),
 #Fig1A
 ```{r}
 #UMAP of the immune cell subsets
-Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID <- factor(Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID, 
-                            levels=c("Activated CD8 T-cells/Early Exhausted CD8 T-cells",
-                                     "Activated CD8 T-cells",
-                                     "Central Memory CD8 T-cells (1)",
-                                     "Central Memory CD8 T-cells (2)", 
-                                     "Central Memory CD8 T-cells (3)",
-                                     "Cytotoxic CD8 T-cells",
-                                     "Effector Memory CD8",
-                                     "Exhausted CD8 T-cells",
-                                     "Th2 T-cells",
-                                     "Th17 T-cells",
-                                     "B-cells",
-                                     "Plasma cells",
-                                     "Plasmablast/Plasma cells",
-                                     "Macrophages M1", 
-                                     "Macrophage M1/M2",
-                                     "Macrophages M2",
-                                     "Mast cells",
-                                     "NK cells"))
 
-cluster.cols = c("plum4", "darkorange1", "lightskyblue2", "firebrick", "burlywood3", "gray51", "springgreen4", "lightpink2", "deepskyblue4", "lightsalmon2", "mediumpurple4", "orange", "maroon", "yellow3", "brown4", "yellow4", "sienna4", "chocolate")
+Final.Immune.Cells <- subset(Immune.Cells.TrueV2,cells=which(!is.na(Immune.Cells.TrueV2$Final_Immune_Cluster_ID))) 
+  
 
-p1 <- DimPlot(object = Immune.Cells.TrueV2, pt.size = 0.1, group.by ="Immune_Cluster_ID", cols = cluster.cols,  split.by = "Class", label = F, raster=TRUE) +
+cluster.cols = c("plum4", "darkorange1", "lightskyblue2", "firebrick", "burlywood3", "gray51", "springgreen4", "lightpink2", "deepskyblue4", "lightsalmon2", "mediumpurple4", "orange", "maroon", "yellow3", "brown4", "yellow4", "sienna4", "chocolate", "gray", "gold2", "black", "#00441b", "#2166ac", "#fddbc7")
+
+p1 <- DimPlot(object = Final.Immune.Cells, pt.size = 0.1, group.by ="Final_Immune_Cluster_ID", cols = cluster.cols,  split.by = "Class", label = F, raster=FALSE) +
   theme_classic(base_size = 20)  ##this is a umap with the clusters grouped with their cell identity
 
 p1
@@ -160,9 +146,12 @@ Immune.Cells.TrueV2@meta.data %>%
       print(n=18)
 
 
-Immune.Cells.TrueV2@meta.data <- droplevels(Immune.Cells.TrueV2@meta.data)
+Final.Immune.Cells@meta.data <- droplevels(Final.Immune.Cells@meta.data)
 
-counts.prop = data.frame(table(Immune.Cells.TrueV2@meta.data$Class, Immune.Cells.TrueV2@meta.data$Immune_Cluster_ID))
+Immune.Cells.TrueV2@meta.data <- Immune.Cells.TrueV2@meta.data %>% 
+  mutate(has_LA=LA_per_Sample>0)
+
+counts.prop = data.frame(table(Final.Immune.Cells@meta.data$Class, Final.Immune.Cells@meta.data$Final_Immune_Cluster_ID))
 counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
 head(counts.prop.perc)
 aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
@@ -194,6 +183,74 @@ pdf(file = "Plots/Endometriosis_LA/Immune_SubClusters_Proportions_Fig1D.pdf", wi
 p1
 dev.off()
 
+
+
+
+#Immune cells by LA status (LA status is by sample not patient) in PE
+
+#Final.Immune.Cells <- subset(Immune.Cells.TrueV2,cells=which(!is.na(Immune.Cells.TrueV2$Final_Immune_Cluster_ID))) 
+
+Final.Immune.Cells.PE <- subset(Final.Immune.Cells, subset = Class %in% "Peritoneal endometriosis")
+
+Final.Immune.Cells.PE@meta.data$Final_Immune_Cluster_ID <- factor(Final.Immune.Cells.PE@meta.data$Final_Immune_Cluster_ID, 
+                            levels=c("B-cells",
+                                     "Effector Memory CD8 T-cells (4)",
+                                     "NK cells (2)",
+                                     "Th17 T-cells",
+                                     "Exhausted CD8 T-cells",
+                                     "Resident Memmory CD8 T-cells (2)",
+                                     "Early Exhausted CD8 T-cells (2)",
+                                     "Macrophages M2",
+                                     "NK cells (1)",
+                                     "Early Exhaused CD8 T-cells (1)",
+                                     "Plasmablast/Plasma cells",
+                                     "Dendritic Cells (2)",
+                                     "Dendritic Cells (1)",
+                                     "Gamma-Delta T-cells (2)",
+                                     "Effector CD8 T-cells",
+                                     "Effector Memory CD8 T-cells (5)",
+                                     "Gamma-Delta T-cells (1)",
+                                     "Effector Memory CD8 T-cells (2)",
+                                     "Macrophages M1",
+                                     "Resident Memmory CD8 T-cells (1)",
+                                     "Th2 T-cells",
+                                     "Effector Memory CD8 T-cells (3)",
+                                     "Effector Memory CD8 T-cells (1)",
+                                     "Mast cells"))
+
+
+Final.Immune.Cells.PE@meta.data <- droplevels(Final.Immune.Cells.PE@meta.data)
+
+Final.Immune.Cells.PE@meta.data <- Final.Immune.Cells.PE@meta.data %>% 
+  mutate(has_LA=LA_per_Sample>0)
+
+counts.prop = data.frame(table(Final.Immune.Cells.PE@meta.data$has_LA, Final.Immune.Cells.PE@meta.data$Final_Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  #scale_fill_manual(name="Class", values = c("Endometrioma" = "#7b3294", 
+   #                   "Eutopic endometrium" = "#c2a5cf", 
+    #                  "Peritoneal endometriosis" = "#d9f0d3", 
+     #                 "Unaffected ovary" = "#008837")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 25)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Immune cells TrueV2 res0.6 in LA Status')
+
+p1
 
 #number of immune cells: first need to reorder cells from alphabetically from last to fisrt
 
@@ -546,23 +603,74 @@ p1
 
 
 #endometrioma vs Endometriosis LA by part
-LA.simple.data = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 5)
-
+LA.simple.data = read_xlsx("data/2024-11-06_Combine_scGroup_withPriority2_analyze_only_endometriosis_positive_parts_deidentified_Rfile.xlsx", sheet = 5)
+LA.simple.data <- LA.simple.data %>% filter(!grepl("No ", Category))
 #endometrioma vs Endometriosis LA by part stats
-Endometrioma <- c(6,0,0,0,0,6,0,0)
-Endometriossis<- c(0,0,4,3,0,12,0,17,16,0,16,2,0,0,0,0,0,0,0,0,0,0,4,7,0,0,1,5,0,6,14,3,4,0,10,3,4,2,4,0,0,0,0,0,0) 
+#Endometrioma <- c(6,0,0,0,0,0,0,0,6,0,0,8,3,0,0,0,0,0,0,0,0,0,0,0,0,0,5)
+#Endometriossis<- c(8,0,0,0,0,0,4,0,3,0,12,17,16,0,0,16,2,0,0,0,0,0,0,1,0,0,0,0,4,7,0,0,1,5,0,14,3,4,10,3,4,2,4,0,0,0,0,0,0,3,0,1,17,0,0,0,10,0,1,0,0,0,0,0,0,0,0,0,0,9,0,0,0,29,13,4,1,6,5,7,4,0,0,2,1,0,0,15,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,6,8,0,0,0,5,0,1,0,3,0,7,1,0,35,1,12,26,20,7,0,3,0,4,0,0,0,13,2,0,0,0,0,7,0,1,6,0,0,0,0,0,0,0,0,28,2,8,3,0,0,0,0) 
+#wil_test <- wilcox.test(Number_of_lymphoid_aggregates ~ Category, data = LA.simple.data)
+#wil_test <- wilcox.test(Endometrioma, Endometriossis)
+#wil_test
 
-wil_test <- wilcox.test(Endometrioma, Endometriossis)
+wilcox.test(Number_of_lymphoid_aggregates ~ Category, data = LA.simple.data)
 
-p1 <- ggplot(LA.simple.data, aes(x=Category, y=Number_of_lymphoid_aggregates, color=Category)) + 
-  scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
-                                                    "Endometriosis" = "#d9f0d3")) + 
-  geom_beeswarm(size=2.5) + 
-  geom_text(x=1, y=15, label="p-value = 0.4654", colour="black", family = "san", fontface = "plain", size =5) +
+#p1 <- ggplot(LA.simple.data, aes(x=Category, y=Number_of_lymphoid_aggregates, color=Category)) + 
+  #scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+   #                                                 "Endometriosis" = "#d9f0d3")) + 
+  #geom_quasirandom(size=2.5) + 
+  #geom_text(x=0.75, y=30, label="p-value = 0.2499", colour="black", family = "san", fontface = "plain", size =5) +
+  #ggtitle("Number of LA in each Endometrioma and Endometriosis part") + 
+  #theme_classic(base_size = 20)
+
+p1 <- ggplot(LA.simple.data, aes(x=Category, y=Number_of_lymphoid_aggregates)) + 
+  geom_quasirandom(size=2.5) + 
+  geom_text(x=0.75, y=30, label="p-value = 0.2499", colour="black", family = "san", fontface = "plain", size =5) +
   ggtitle("Number of LA in each Endometrioma and Endometriosis part") + 
   theme_classic(base_size = 20)
 
+
 p1
+
+
+#Number of LA in Endometrioma and Endometriosis by part with patients labeled
+LA.summarised <- LA.simple.data %>%
+  select(`PAPER ID`, Number_of_lymphoid_aggregates, Category) %>% 
+  group_by(`PAPER ID`, Category) %>% 
+  summarise(total_lymph_agg = sum(Number_of_lymphoid_aggregates)) %>% 
+  mutate(plotting_id = paste0(`PAPER ID`, Category))
+
+LA.summarised$plotting_id <- factor(LA.summarised$plotting_id, levels = LA.summarised$plotting_id[order(LA.summarised$total_lymph_agg)])
+
+wilcox.test(total_lymph_agg ~ Category, data = LA.summarised)
+
+#ggplot(LA.summarised, aes(x=plotting_id, y=total_lymph_agg, color=Category)) + 
+  #scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+  #                                                  "Endometriosis" = "#d9f0d3")) + 
+  #geom_quasirandom(size=2.5) + 
+  #scales= "free_x" means that it can ignore any point that is not in that category
+  #facet_wrap(~Category, scales = "free_x") + 
+  # geom_text(x=1, y=15, label="p-value = 0.0422", colour="black", family = "san", fontface = "plain", size =5) +
+  #ggtitle("Number of LA in each Endometrioma and Endometriosis part") + 
+  #theme_classic(base_size = 20) +
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
+  #geom_hline(yintercept = 0, linetype = 2) +
+  #scale_x_discrete(labels = setNames(LA.summarised$`PAPER ID`, LA.summarised$plotting_id))
+  
+  
+
+ggplot(LA.summarised, aes(x=plotting_id, y=total_lymph_agg)) + 
+  geom_quasirandom(size=2.5) + 
+  #scales= "free_x" means that it can ignore any point that is not in that category
+  facet_wrap(~Category, scales = "free_x") + 
+  #geom_text(x=1, y=15, label="p-value = 0.001217", colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in each Endometrioma and Endometriosis in each patient") + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  scale_x_discrete(labels = setNames(LA.summarised$`PAPER ID`, LA.summarised$plotting_id))
+  
+
+
 ```
 
 ## Fig 1C
@@ -696,6 +804,49 @@ ggsave("data/fig1.pdf",fig1, width = 210,
 ```
 
 
+#DEG of B-cell in LA true vs false and volcano plot
+```{r}
+#DEG
+Idents(Final.Immune.Cells.PE) <- Final.Immune.Cells.PE$has_LA
 
+DEG <- FindMarkers(Final.Immune.Cells.PE, ident.1 = "TRUE", ident.2 = "FALSE", test.use="MAST")
 
+DEG <- DEG %>% rownames_to_column("genes")
+
+#volcano plot
+fc.p = 0.9
+pv.p = 0.05
+DEG$STATUS = "NOT.SIG"
+DEG[DEG$avg_log2FC < -fc.p & DEG$p_val_adj < pv.p, ]$STATUS = "Down"
+DEG[DEG$avg_log2FC > fc.p & DEG$p_val_adj < pv.p, ]$STATUS = "Up"
+
+p1 <- ggplot(DEG, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
+  geom_point(aes(color = STATUS), cex = 1.45) +
+  scale_color_manual(values = c("darkgreen", "grey", "red")) +
+  ylim(0, 65) +
+  theme_bw(base_size = 15) + 
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) +
+  geom_text_repel(
+    data          = subset(DEG, avg_log2FC > 1),
+    aes(label = DEG$genes),
+    segment.size  = 0.4,
+    direction     = "y",
+    segment.color = "grey50",
+    hjust         = 0
+  ) +
+  geom_text_repel(
+    data          = subset(DEG, avg_log2FC < -1),
+    aes(label = DEG$genes),
+    segment.size  = 0.4,
+    direction     = "y",
+    segment.color = "grey50",
+    hjust         = 1
+  ) +
+  geom_hline(yintercept = -log10(pv.p), linetype="dotted", color = "black", size= 0.5) +
+  geom_vline(xintercept = -fc.p, linetype="dotted", color = "black", size= 0.5) +
+  geom_vline(xintercept = fc.p, linetype="dotted", color = "black", size= 0.5) +
+  labs(title = paste0(feature, " : ", c, " (n=", nDEG, ") FC: ", fc.p, " pval = ", pv.p))
+p1
+```
 

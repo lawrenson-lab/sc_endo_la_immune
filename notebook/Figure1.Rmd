@@ -234,7 +234,8 @@ aux$percent = aux$Freq / sum(aux$Freq)
 counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
 
 bsize = 20
-p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1,  
+  label = signif(round(percent, digits = 3), digits = 2))) +
   geom_bar(position="stack",stat = "identity", width=0.8) +
   #scale_fill_manual(name="Class", values = c("Endometrioma" = "#7b3294", 
    #                   "Eutopic endometrium" = "#c2a5cf", 
@@ -242,6 +243,7 @@ p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
      #                 "Unaffected ovary" = "#008837")) +
   scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
   coord_flip() +
+  geom_text(data=subset(counts.prop.perc,Freq != 0), position = position_stack(vjust = 0.5), size = 4, color = "#ffffff") +
   theme_set(theme_classic(base_size = 25)) +
   theme(plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
@@ -249,6 +251,8 @@ p1 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
         axis.title.x = element_blank(),
         axis.title.y = element_blank()) +
   ggtitle('Proportion of Immune cells TrueV2 res0.6 in LA Status')
+
+
 
 p1
 
@@ -814,7 +818,7 @@ DEG <- FindMarkers(Final.Immune.Cells.PE, ident.1 = "TRUE", ident.2 = "FALSE", t
 DEG <- DEG %>% rownames_to_column("genes")
 
 #volcano plot
-fc.p = 0.9
+fc.p = 0.5
 pv.p = 0.05
 DEG$STATUS = "NOT.SIG"
 DEG[DEG$avg_log2FC < -fc.p & DEG$p_val_adj < pv.p, ]$STATUS = "Down"
@@ -823,21 +827,21 @@ DEG[DEG$avg_log2FC > fc.p & DEG$p_val_adj < pv.p, ]$STATUS = "Up"
 p1 <- ggplot(DEG, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
   geom_point(aes(color = STATUS), cex = 1.45) +
   scale_color_manual(values = c("darkgreen", "grey", "red")) +
-  ylim(0, 65) +
+  ylim(0, 80) +
   theme_bw(base_size = 15) + 
   theme(legend.position = "bottom",
         plot.title = element_text(hjust = 0.5)) +
   geom_text_repel(
-    data          = subset(DEG, avg_log2FC > 1),
-    aes(label = DEG$genes),
+    data          = subset(DEG, avg_log2FC > 0.5),
+    aes(label = genes),
     segment.size  = 0.4,
     direction     = "y",
     segment.color = "grey50",
     hjust         = 0
   ) +
   geom_text_repel(
-    data          = subset(DEG, avg_log2FC < -1),
-    aes(label = DEG$genes),
+    data          = subset(DEG, avg_log2FC < -0.5),
+    aes(label = genes),
     segment.size  = 0.4,
     direction     = "y",
     segment.color = "grey50",
@@ -845,8 +849,33 @@ p1 <- ggplot(DEG, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
   ) +
   geom_hline(yintercept = -log10(pv.p), linetype="dotted", color = "black", size= 0.5) +
   geom_vline(xintercept = -fc.p, linetype="dotted", color = "black", size= 0.5) +
-  geom_vline(xintercept = fc.p, linetype="dotted", color = "black", size= 0.5) +
-  labs(title = paste0(feature, " : ", c, " (n=", nDEG, ") FC: ", fc.p, " pval = ", pv.p))
+  geom_vline(xintercept = fc.p, linetype="dotted", color = "black", size= 0.5) #+
+  #labs(title = paste0(feature, " : ", c, " (n=", nDEG, ") FC: ", fc.p, " pval = ", pv.p))
+
 p1
 ```
 
+
+#pathway analysis
+```{r}
+BiocManager::install("clusterProfiler")
+
+BiocManager::install("msigdbr")
+
+library(clusterProfiler)
+library(msigdbr)
+
+m_df <- msigdbr(species = "Homo sapiens")%>%filter(str_detect(gs_name,"REACTOME"))%>%
+    distinct(gs_name,gene_symbol)
+temp<-DEG%>%filter(p_val_adj<0.05 & abs(avg_log2FC)>.5)
+oraRes<-temp%>%split(temp$STATUS)%>%lapply(function(x) enricher(x$genes,TERM2GENE = m_df))
+temp<-lapply(names(oraRes),function(x) 
+  oraRes[[x]]%>%as.data.frame()%>%mutate(cluster=x))%>%bind_rows()
+
+
+barplot(oraRes$Up)
+
+dotplot(oraRes$Up)
+
+dotplot(oraRes$Down)
+```

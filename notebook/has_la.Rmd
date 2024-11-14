@@ -135,9 +135,9 @@ p0<-temp%>%ggplot(aes(y = Final_Immune_Cluster_ID, x = prop, fill = has_LA, labe
     geom_bar(position="stack",stat = "identity", width=0.8) +
     geom_text(position = position_stack(vjust = 0.5), size = 4) +
     theme_classic(base_size = 14)+labs(x='%',y="")+theme(axis.line.y = element_blank(),axis.ticks.y = element_blank())
-p1<-temp%>%group_by(Final_Immune_Cluster_ID)%>%summarise(n=sum(n))%>%
-  mutate(n=ifelse(Final_Immune_Cluster_ID=="Total",0,n))%>%
-  ggplot(aes(x=n,y=Final_Immune_Cluster_ID))+geom_col()+theme_classic(base_size = 14)+
+p1<-temp%>%distinct(Final_Immune_Cluster_ID,total)%>%
+  mutate(total=ifelse(Final_Immune_Cluster_ID=="Total",0,total))%>%
+  ggplot(aes(x=total,y=Final_Immune_Cluster_ID))+geom_col()+theme_classic(base_size = 14)+
   theme(axis.text.y =element_blank(),axis.line.y = element_blank(),axis.ticks.y = element_blank() )+labs(y="")
 p0<-plot_grid(p0+theme(legend.position = "none"),p1,get_legend(p0),align = 'h',axis = "tblr",rel_widths = c(.6,.3,.1),ncol = 3)
 

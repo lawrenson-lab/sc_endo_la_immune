@@ -14,7 +14,6 @@ sc$has_LA<-sc$LA_perSample>0
 ```
 
 ```{r}
-mesen<-subset(mesen,cells=which(mesen$published_mesenchymal_subtype=="EnS_Proliferative"))
 temp<-mesen@meta.data%>%count(Patient.No.,SampleName,has_LA,harmonized_major_plus_immune_cell_type)
 labels<-unique(temp$harmonized_major_plus_immune_cell_type)
 ```
@@ -30,11 +29,12 @@ mat<-lapply(labels, function(x) {PseudobulkExpression(
     method = "aggregate",
     normalization.method = "LogNormalize")})
 names(mat)<-labels
-pcares<-prcomp(mat$RNA)
-temp<-pcares$rotation[,1:2]%>%as.data.frame()%>%rownames_to_column("SampleName")%>%mutate(SampleName=str_replace(SampleName,"-","_"))%>%left_join(temp)
-p0<-temp%>%ggplot(aes(x=PC1,y=PC2,label=SampleName,col=has_LA,size=n))+geom_point()+geom_text(show.legend = F)
-p1<-temp%>%ggplot(aes(x=PC1,y=PC2,label=SampleName,col=as.factor(Patient.No.),size=n))+geom_point()+geom_text(show.legend = F)
-plot_grid(p0,p1)
+pcares<-lapply(mat,function(x) prcomp(x$RNA)$rotation)
+temp1<-lapply(names(pcares), function(x)
+  pcares[[x]]%>%as.data.frame()%>%select(1:2)%>%
+  rownames_to_column("SampleName")%>%mutate(SampleName=str_replace(SampleName,"-","_"))%>%
+  left_join(temp%>%filter(harmonized_major_plus_immune_cell_type==x)))%>%bind_rows()
+temp1%>%ggplot(aes(x=PC1,y=PC2,label=SampleName,col=has_LA,size=n))+geom_point()+geom_text(show.legend = F)+facet_wrap(~harmonized_major_plus_immune_cell_type,scales = "free")
 ```
 ```{r}
 #temp$Patient.No.<-as.factor(temp$Patient.No.)

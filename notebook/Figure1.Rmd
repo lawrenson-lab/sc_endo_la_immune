@@ -811,9 +811,12 @@ ggsave("data/fig1.pdf",fig1, width = 210,
 #DEG of B-cell in LA true vs false and volcano plot
 ```{r}
 #DEG
-Idents(Final.Immune.Cells.PE) <- Final.Immune.Cells.PE$has_LA
 
-DEG <- FindMarkers(Final.Immune.Cells.PE, ident.1 = "TRUE", ident.2 = "FALSE", test.use="MAST")
+Bcells<- subset(Final.Immune.Cells.PE, subset = Final_Immune_Cluster_ID %in% "B-cells")
+
+Idents(Bcells) <- Bcells$has_LA #this is to say which columns to use
+
+DEG <- FindMarkers(Bcells, ident.1 = "TRUE", ident.2 = "FALSE")
 
 DEG <- DEG %>% rownames_to_column("genes")
 
@@ -853,6 +856,36 @@ p1 <- ggplot(DEG, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
   #labs(title = paste0(feature, " : ", c, " (n=", nDEG, ") FC: ", fc.p, " pval = ", pv.p))
 
 p1
+
+
+
+#doing DEG and volcano plots based pseudobulk
+library("SingleCellExperiment")
+
+#first convert objects to singleCellExperiiment object
+Bcells2 <- as.SingleCellExperiment(Final.Immune.Cells.PE)
+
+#need library glmGampoi
+BiocManager::install("glmGamPoi")
+library("glmGamPoi")
+
+#This is the grouping of cells
+reduced_sce <- pseudobulk(Bcells2, group_by = vars(Patient.No., has_LA, SampleName, harmonized_major_plus_immune_cell_type), 
+                          n_cells = n())
+
+save("reduced_sce", file = "reduced_sce.rda")
+
+# Remove NA's
+reduced_sce <- reduced_sce[,!is.na(reduced_sce$SampleName)]
+
+colData(reduced_sce)$Patient.No. <- factor(colData(reduced_sce)$Patient.No.)
+colData(reduced_sce)$has_LA <- factor(colData(reduced_sce)$has_LA)
+
+# Use DESeq2's size factor calculation procedure
+fit <- glm_gp(reduced_sce, design = ~ has_LA + harmonized_major_plus_immune_cell_type + Patient.No., size_factor = "ratio", verbose = TRUE)
+
+#to test the differential expression
+es <- test_de(fit, contrast = cond(has_LA = "TRUE") - cond(has_LA = "FALSE"))
 ```
 
 
@@ -867,7 +900,14 @@ library(msigdbr)
 
 m_df <- msigdbr(species = "Homo sapiens")%>%filter(str_detect(gs_name,"REACTOME"))%>%
     distinct(gs_name,gene_symbol)
-temp<-DEG%>%filter(p_val_adj<0.05 & abs(avg_log2FC)>.5)
+
+temp <- DEG %>% mutate(keep = case_when(avg_log2FC > 0 & pct.1 > 0.8 ~ TRUE,
+                                avg_log2FC < 0 & pct.2 > 0.8 ~ TRUE,
+                                TRUE ~ FALSE)) %>%
+  filter(keep, p_val_adj < 0.05) %>%
+  mutate(STATUS = ifelse(avg_log2FC > 0, "Up", "Down"))
+
+#temp<-DEG%>%filter(p_val_adj<0.05 & abs(avg_log2FC)>.5)
 oraRes<-temp%>%split(temp$STATUS)%>%lapply(function(x) enricher(x$genes,TERM2GENE = m_df))
 temp<-lapply(names(oraRes),function(x) 
   oraRes[[x]]%>%as.data.frame()%>%mutate(cluster=x))%>%bind_rows()

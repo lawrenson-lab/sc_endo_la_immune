@@ -14,34 +14,37 @@ sc$has_LA<-sc$LA_perSample>0
 ```
 
 ```{r}
-mesen<-subset(mesen,cells=which(mesen$published_mesenchymal_subtype=="EnS_Proliferative"))
-temp<-mesen@meta.data%>%count(Patient.No.,SampleName,has_LA)
+temp<-mesen@meta.data%>%count(Patient.No.,SampleName,has_LA,harmonized_major_plus_immune_cell_type)
+labels<-unique(temp$harmonized_major_plus_immune_cell_type)
 ```
 
 ```{r}
-mat<-PseudobulkExpression(
-  mesen,
-  assays = "RNA",
-  features = NULL,
-  return.seurat = FALSE,
-  group.by = "SampleName",
-  layer = "data",
-  method = "aggregate",
-  normalization.method = "LogNormalize")
-pcares<-prcomp(mat$RNA)
-temp<-pcares$rotation[,1:2]%>%as.data.frame()%>%rownames_to_column("SampleName")%>%mutate(SampleName=str_replace(SampleName,"-","_"))%>%left_join(temp)
-p0<-temp%>%ggplot(aes(x=PC1,y=PC2,label=SampleName,col=has_LA,size=n))+geom_point()+geom_text(show.legend = F)
-p1<-temp%>%ggplot(aes(x=PC1,y=PC2,label=SampleName,col=as.factor(Patient.No.),size=n))+geom_point()+geom_text(show.legend = F)
-plot_grid(p0,p1)
+mat<-lapply(labels, function(x) {PseudobulkExpression(
+    subset(sc,cells = which(sc$harmonized_major_plus_immune_cell_type==x)),
+    assays = "RNA",
+    features = NULL,
+    return.seurat = FALSE,
+    group.by = "SampleName",
+    layer = "data",
+    method = "aggregate",
+    normalization.method = "LogNormalize")})
+names(mat)<-labels
+pcares<-lapply(mat,function(x) prcomp(x$RNA)$rotation)
+temp1<-lapply(names(pcares), function(x)
+  pcares[[x]]%>%as.data.frame()%>%select(1:2)%>%
+  rownames_to_column("SampleName")%>%mutate(SampleName=str_replace(SampleName,"-","_"))%>%
+  left_join(temp%>%filter(harmonized_major_plus_immune_cell_type==x)))%>%bind_rows()
+temp1%>%ggplot(aes(x=PC1,y=PC2,label=SampleName,col=has_LA,size=n))+geom_point()+geom_text(show.legend = F)+facet_wrap(~harmonized_major_plus_immune_cell_type,scales = "free")
 ```
 ```{r}
-mat<-as.matrix(mat$RNA)
 #temp$Patient.No.<-as.factor(temp$Patient.No.)
-designM<-model.matrix(~0+has_LA+n,#groups around replicates=samplename
-                      data=temp)#
-fit<-lmFit(mat,designM)
-cont<-makeContrasts(has_LATRUE-has_LAFALSE,levels = designM)
-fit<-contrasts.fit(fit,cont)
-fit <- eBayes(fit, robust=TRUE)
-deg<-topTable(fit,number = nrow(mat))
+designM<-lapply(labels,function(x) model.matrix(~0+has_LA+n,#groups around replicates=samplename
+                      data=temp%>%filter(harmonized_major_plus_immune_cell_type==x))
+names(designM)<-labels
+deg<-lapply(labels, function(x) {fit<-lmFit(mat[[x]]$RNA,designM[[x]])
+            cont<-makeContrasts(has_LATRUE-has_LAFALSE,levels = designM[[x]])
+            fit<-contrasts.fit(fit,cont)
+            fit <- eBayes(fit)
+            deg<-topTable(fit,number = nrow(mat[[x]]$RNA))
+})
 ```

@@ -1,0 +1,106 @@
+---
+title: "Bcells driver TFS"
+---
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(igraph)
+library(ComplexHeatmap)
+library(circlize)
+
+sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
+sc<-subset(sc,cells = which(sc$harmonized_major_cell_type%in%c("B cells","Plasma cells")))
+
+kelly.colours <- c("gold2", "plum4", "darkorange1", "lightskyblue2", "firebrick", "burlywood3", "gray51", "springgreen4", "lightpink2", "deepskyblue4", "lightsalmon2", "mediumpurple4", "orange", "maroon", "yellow3", "brown4", "yellow4", "sienna4", "chocolate", "gray19")
+#b cell status markers
+i<-c("CD19","MS4A1","CD79A","CD79B","CD27","CD38","PAX5","BCL6","BCL2","MME","ONECUT2","IRF4","XBP1","SDC1","PRDM1","CD22","CD72","IGHD","IGHM","JCHAIN","IGKC","IGHG1","IGHG2","IGHG3","IGHG4","IGHA1","IGHA2","IGLC2","HLA-DRA","CD69","CD24","SPN","CD80","CD86","CD70","NT5E","TFRC","IL2RA","SPN","CR1","CR2","ITGAM","CD1C","CD274","FCER2","PDCD1","FAS","FASLG","CD5","TBX21")
+```
+# Subclustering
+```{r}
+sc<-FindVariableFeatures(sc)
+sc<-RunPCA(sc)
+sc<-RunUMAP(sc,dims = 1:30)
+sc<-FindNeighbors(sc,dims = 1:5)
+for (x in c(seq(0.01,0.09,0.02),seq(0.1,.9,0.2))){
+  sc<-FindClusters(sc,resolution = x)}
+#plots
+temp<-sc@meta.data%>%
+  select(c(SCT_snn_res.0.01:SCT_snn_res.0.09,SCT_snn_res.0.1:SCT_snn_res.0.9))%>%
+  apply(2,function(x) length(unique(x)))%>%
+  as.data.frame()
+colnames(temp)<-"nclust"
+temp<-temp%>%
+  rownames_to_column("resolution")%>%
+  mutate(resolution=as.numeric(str_remove(resolution,"SCT_snn_res.")))
+temp%>%ggplot(aes(x=resolution,y=nclust))+geom_point()+geom_line()#stable at 0.05
+#using 0.1
+DimPlot(sc,group.by = "SCT_snn_res.0.1")
+sc@meta.data%>%
+  count(harmonized_major_cell_type,SCT_snn_res.0.1)%>%
+  ggplot(aes(x=SCT_snn_res.0.1,y=n))+geom_col()+
+  facet_wrap(~harmonized_major_cell_type,nrow=2)
+lapply(unique(sc$harmonized_major_cell_type),function(x)
+  DotPlot(subset(sc,cells = which(sc$harmonized_major_cell_type==x)),features = sort(i),group.by = "SCT_snn_res.0.1")+RotatedAxis()+coord_flip()+scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+ggtitle(x))
+```
+# Pseudotime
+```{r}
+rd1<-as.data.frame(sc@reductions$pca@cell.embeddings[,1:2])
+rd1$cluster<-sc$SCT_snn_res.0.1
+
+p0<-rd1%>%ggplot(aes(x=PC_1,y=PC_2,col=as.factor(cluster)))+geom_point()+
+  scale_color_manual(values=kelly.colours)+labs(color="")+theme_classic(base_size = 16)
+lin1 <- getLineages(rd1[,1:2], rd1$cluster, start.clus = '4',end.clus='0')#chose start/end from p4 
+lin2 <- getLineages(rd1[,1:2], rd1$cluster)#chose start/end from p4 
+
+
+get_lineage_plot<-function(lineage){
+temp<-SlingshotDataSet(lineage)
+g<-graph.adjacency(temp@adjacency,,mode = "undirected")
+pos<-rd1%>%group_by(cluster)%>%
+  summarise(PC_1=mean(PC_1),PC_2=mean(PC_2))%>%mutate(cluster=as.character(cluster))
+edges<-get.edgelist(g)%>%as.data.frame()
+colnames(edges)<-c("node1","node2")
+edges<-edges%>%left_join(pos,by=c("node1"="cluster"))%>%left_join(pos,by=c("node2"="cluster"))
+colnames(edges)[3:6]<-c("from_x","from_y","to_x","to_y")
+p0+geom_segment(data=edges,aes(x=from_x,xend=to_x,y=from_y,yend=to_y),col="black")+
+    geom_point(data=pos,aes(x=PC_1,y=PC_2),col="gray",size=7,show.legend = F)+
+    geom_text(data=pos,aes(x=PC_1,y=PC_2,label=cluster),col="black")
+}
+get_lineage_plot(lin1)+ggtitle("lin1")#lin2 looks the same
+
+crv1 <- getCurves(lin1)
+crv2 <- getCurves(lin2)
+plot(rd1[,1:2], col = kelly.colours[rd1$cluster], asp = 1, pch = 16)
+lines(SlingshotDataSet(crv1), lwd = 3, col = 'blue')
+lines(SlingshotDataSet(crv2), lwd = 3, col = 'black')
+
+traject1<-crv1%>%slingPseudotime()%>%as.data.frame()
+colnames(traject1)<-"pseudotime1"
+traject2<-crv2%>%slingPseudotime()%>%as.data.frame()
+colnames(traject2)<-"pseudotime2"
+rd1<-rd1%>%rownames_to_column("Cell")%>%
+  left_join(traject1%>%rownames_to_column("Cell"))%>%
+  left_join(traject2%>%rownames_to_column("Cell"))
+
+```
+# genes vs time
+```{r}
+rd1<-rd1%>%arrange(pseudotime2)
+rd1<-rd1%>%left_join(sc@meta.data%>%
+                       select(harmonized_major_cell_type,has_LA,Class)%>%
+                       rownames_to_column("Cell"))
+temp<-as.matrix(GetAssayData(sc,assay = "SCT"))
+i<-c(i,"BCL6","NFKB1","NFKB2","NFATC1","NFATC2","NFATC3","PRDM1",
+     "SPI1","IRF4","XBP1","SPIB","PAX5","EBF1","TCF3","SLC22A2","POU2AF1")
+i<-c(i,"MKI67","CD9","CTNNB1","JUN","CDKN2A","CCL4","CCL5","CCL8","HBA1","HBA2","HBB1","MMP9","MYL9","ITM2C")
+toplot<-rd1%>%filter(Class=="Peritoneal endometriosis")
+temp<-temp[sort(i),rd1$Cell]
+
+Heatmap(temp,show_column_names = F,cluster_columns = F,top_annotation = HeatmapAnnotation(pseudotime=rd1$pseudotime2),col=colorRamp2(c(6,4,2,0), c("#651B79","#de7065ff","#FFC28B","white")),use_raster=F,cluster_rows = F,name="expression")
+
+```
+
+
+with open('../../Downloads/Immune_All_Low.pkl', 'rb') as f:
+    data = pickle.load(f)

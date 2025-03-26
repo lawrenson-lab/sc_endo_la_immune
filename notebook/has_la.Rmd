@@ -304,4 +304,51 @@ temp<-temp%>%group_by(SampleName,harmonized_major_cell_type,has_LA)%>%summarise(
             CD11b="ITGAM",CD35="CR1", "CD5","CD1C",CD23="FCER2",
             CD147="BSG", "CD1D", "FASLG", "PDCD1","TNFSF10","GZMB")
 
+```
+# SCENIC plot
+```{r}
+b_scenic<-read_csv("int/bcells.auc.csv")
+b_scenic<-aux_table%>%
+  distinct(barcode,LA_per_Sample,Final_Immune_Cluster_ID)%>%
+  right_join(b_scenic,by=c("barcode"="Cell"))
+b_scenic$has_LA<-b_scenic$LA_per_Sample>0
+scaled<-b_scenic%>%
+  column_to_rownames("barcode")%>%
+  select(`ARID3A(+)`:`ZSCAN18(+)`)%>%
+  t()%>%scale()%>%t()
+scaled<-scaled%>%as.data.frame()%>%
+  rownames_to_column("barcode")%>%
+  left_join(b_scenic%>%select(barcode,has_LA))
+scaled<-scaled%>%
+  pivot_longer(`ARID3A(+)`:`ZSCAN18(+)`,
+               names_to = "regulon",values_to = "score")
+scaled<-scaled%>%
+  mutate(positiv=score>0)%>%
+  group_by(has_LA,regulon)%>%
+  summarise(score=mean(score),
+         cells=sum(positiv>0))
+scaled<-scaled%>%
+  group_by(regulon)%>%
+  mutate(type=ifelse(has_LA[which.max(score)],"LA+","LA-"),
+         dif=max(score)-min(score))
 
+
+scaled%>%group_by(type)%>%slice_max(abs(dif),n=20)%>%
+  ggplot(aes(y=regulon,x=has_LA,col=score,size=prop))+geom_point()+
+  facet_grid(rows=vars(type),scales = "free_y",space = "free")+
+  scale_colour_viridis_c(option = "H")+theme(strip.background = element_blank())+labs(size="% positive")
+
+regulons<-read_csv("int/bcells.regulons.csv")
+i<-scaled%>%group_by(type)%>%slice_max(abs(dif),n=20)%>%ungroup()%>%filter(type=="LA+")%>%distinct(regulon)%>%unlist()
+i<-str_remove(i,"\\(.+")
+get_targets<-function(tf){
+  regulons%>%filter(TF==tf)%>%
+    select(TargetGenes)%>%unlist()%>%
+    paste(collapse = ", ")%>%#if several motifs
+    str_split_1(pattern = ", \\(")%>%
+    str_remove_all("\\[|\\(|\\'|, .+")%>%
+    unique()}
+targets<-lapply(i, get_targets)
+names(targes)<-i
+DotPlot(subset(sc,cells = which(sc$harmonized_major_cell_type=="B cells")),features = targets$KLF6,group.by = "has_LA")+coord_flip()+scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+ggtitle("KLF6 regulon")
+oraRes<-lapply(targets,function(x) enricher(x,TERM2GENE = m_df)%>%as.data.frame()%>%filter(Count>1))

@@ -22,42 +22,7 @@ sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 aux_table<-sc@meta.data
 ```
 
-#   Cell composition contrast
-## per class
-```{r}
-aux_table<-aux_table%>%filter(Class%in%c("Peritoneal endometriosis","Eutopic endometrium"))
-temp<-aux_table%>%distinct(Class,SampleName)
-
-props<-getTransformedProps(aux_table$harmonized_major_plus_immune_cell_type,
-                           aux_table$SampleName)
-props<-props$TransformedProps[,temp$SampleName]
-designM<-model.matrix(~0+Class,data=temp)#groups around replicates=samplename
-colnames(designM)<-str_replace(colnames(designM)," ","_")
-
-fit<-lmFit(props,designM)
-cont<-makeContrasts(ClassPeritoneal_endometriosis-ClassEutopic_endometrium,levels = designM)
-fit<-contrasts.fit(fit,cont)
-fit <- eBayes(fit, robust=TRUE)
-res<-topTable(fit,number = nrow(props),coef = 1)
-res<-res%>%rownames_to_column("cell_type")
-
-p0<-res%>%arrange(logFC)%>%filter(cell_type!="Exclude")%>%mutate(cell_type=factor(cell_type,levels=cell_type))%>%ggplot(aes(x=logFC,y=cell_type,fill=logFC,size=adj.P.Val))+geom_point(shape=21)+scale_size(range=c(8,1),breaks = c(0.5,0.05))+scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+theme_classic(base_size = 14)+ggtitle("PE - Eu")
-
-temp<-aux_table%>%filter(harmonized_major_plus_immune_cell_type!="Exclude")%>%count(Class,harmonized_major_plus_immune_cell_type)%>%mutate(harmonized_major_plus_immune_cell_type=factor(harmonized_major_plus_immune_cell_type,levels=p0$data$cell_type))
-p1<-temp%>%ggplot(aes(x=n,y=harmonized_major_plus_immune_cell_type))+geom_col()+facet_grid(~Class)+scale_x_log10()+theme_classic(base_size = 14)+theme(axis.text.y = element_blank(),strip.background = element_blank())+labs(y="",x="cells")
-pA<-plot_grid(p0+theme(legend.position = "none"),p1,align = 'h',axis = "tb",rel_widths = c(.6,.4))
-
-plot_df<-aux_table%>%filter(harmonized_major_plus_immune_cell_type!="Exclude")%>%
-  count(Class,harmonized_major_plus_immune_cell_type,name = "cell_n")
-plot_df<-plot_df%>%group_by(harmonized_major_plus_immune_cell_type)%>%summarise(cell_n=sum(cell_n),Class="Total")%>%bind_rows(plot_df)
-p0<-plot_df%>%ggplot(aes(x=Class,y=cell_n,fill=harmonized_major_plus_immune_cell_type))+geom_bar(stat="identity",position = "fill")+scale_fill_manual(values = unique(c(cluster.cols,kelly.colours)))+labs(x="",y='proportion',fill="")+theme_classic(base_size = 14)+theme(axis.text.x = element_text(angle = 45,vjust = 1,hjust = 1))
-
-p1<-res%>%arrange(logFC)%>%mutate(cell_type=factor(cell_type,levels=cell_type))%>%ggplot(aes(x=logFC,y=cell_type,fill=logFC,size=adj.P.Val))+geom_point(shape=21)+scale_size(range=c(8,1),breaks = c(0.5,0.05))+scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+theme_classic(base_size = 14)
-
-part1<-plot_grid(p0+theme(legend.position = "none"),p1,rel_widths = c(.3,.7),align = 'h')
-plot_grid(part1,get_legend(p0+guides(fill=guide_legend(ncol =1))),rel_widths = c(.8,.2))
-```
-## per LA status
+# Cell composition per LA status
 ### scatterplot
 ```{r}
 aux_la<-read_tsv("data/LA_aux.tsv")#from LA_bioinfo:Marcela
@@ -297,12 +262,15 @@ temp<-temp%>%group_by(SampleName,harmonized_major_cell_type,has_LA)%>%summarise(
 
 ```
 ```{r}
- markers<-c(CD20="MS4A1",CD95="FAS",Tbet="TBX21",CD11c="ITGAX",CD21="CR2",
-            CD43="SPN",CD25="IL2RA",CD71="TFRC",CD73="NT5E","CD27","CRP",
-            "SIGLEC6","FCRL4","CD22","CXCR3","CD38","CD19","CD24","CD40",
-            "IL10","IGHD","IGHM","BCL2","BCL6","CD80","CD86","CD70",
-            CD11b="ITGAM",CD35="CR1", "CD5","CD1C",CD23="FCER2",
-            CD147="BSG", "CD1D", "FASLG", "PDCD1","TNFSF10","GZMB")
+markers<-list("Immune regulation"=c("BSG","PDCD1","CD274","PDCD1LG2","TGFB1","IL10","EBI3","GZMB"),
+            "Differentiation state"=c("CD80","CD86","CD27","CD38","CD24","CD69","CD70"),
+            "GC vs non-GC"=c("BCL2","BCL6"),
+            "B1 vs B2 vs Mz"= c("CR1","CR2","FCER2"),
+            "CD22","CD19","MS4A1",
+            Naive=c("IGHD","IGHM"))
+markers<-markers%>%reshape2::melt()%>%mutate(marker=value)%>%select(-value)%>%deframe()
+
+temp%>%ggplot(aes(x=has_LA,y=features.plot,size = pct.exp,colour = avg.exp.scaled,group = feature.groups))+geom_point()+scale_color_viridis_c(option = 'H')+facet_grid(cols=vars(id),rows = vars(feature.groups),scales = "free_y",space = "free")+theme_classic(base_size = 14)+theme(strip.text.x = element_text(angle = 55,vjust = .5,hjust = .5),strip.background = element_blank(),strip.text.y = element_text(angle = 0))+labs(x="has LA",y="",col="Average\nexpression",size="Percent\nexpressed")+ggtitle("Scaled per LA group")
 
 ```
 # SCENIC plot

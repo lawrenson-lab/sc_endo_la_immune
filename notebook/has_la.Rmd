@@ -123,6 +123,8 @@ la_auxPE%>%filter(barcode%in%enepi)%>%ggplot(aes(x=has_LA,y=activity))+geom_viol
 
 # DEA
 ```{r}
+library(igraph)
+
 sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"))
 la_aux<-read_tsv("data/LA_aux.tsv")
 colnames(la_aux)[2]<-"LA_per_Sample"
@@ -150,13 +152,23 @@ p2<-deg%>%filter(cell_type=="mesen")%>%ggplot(aes(x=avg_log2FC,y=-log10(p_val_ad
 m_df <- msigdbr(species = "Homo sapiens")%>%
     filter(str_detect(gs_name,"REACTOME"))%>%
     distinct(gs_name,gene_symbol)
-temp<-deg%>%filter(p_val_adj<0.01 & abs(avg_log2FC)>2.5)%>%
+temp<-deg%>%filter(p_val_adj<0.01 & abs(avg_log2FC)>1)%>%
   mutate(STATUS=ifelse(avg_log2FC<0,"Down","Up"))%>%
   unite("cluster",cell_type:STATUS,remove = F)
 oraRes<-temp%>%split(temp$cluster)%>%lapply(function(x) enricher(x$gene,TERM2GENE = m_df))
 oraRes<-lapply(names(oraRes),function(x) 
   oraRes[[x]]%>%as.data.frame()%>%mutate(cluster=x))%>%bind_rows()
 oraRes%>%separate(cluster,into = c("cell_type","STATUS"),remove = F)%>%ggplot(aes(x=cell_type,y=str_remove(ID,"REACTOME_"),col=p.adjust,fill=p.adjust,size=Count,shape=STATUS))+geom_point()+scale_shape_manual(values=24:25)+labs(x="",y="")+theme_classic(base_size = 14)
+
+temp<-split(oraRes,f = oraRes$cluster)%>%lapply(function(x) x%>%separate_rows(geneID,sep = "/")%>%distinct(ID,geneID))
+edges<-lapply(temp,function(x)
+  table(x)%>%crossprod()%>%as.data.frame()%>%rownames_to_column("g1")%>%pivot_longer(-1,names_to = "g2",values_to = "functions"))
+g<-lapply(edges,function(x) graph_from_data_frame(x[,1:2],directed = F))
+E(g$EnEpi_Down)$weight<-edges$EnEpi_Down$functions
+V(g$EnEpi_Down)$size<-temp$EnEpi_Down%>%count(geneID)%>%select(n)%>%unlist()
+g<-lapply(g,function(x) simplify(x,remove.loops = T,remove.multiple = T,edge.attr.comb = "random"))
+plot.igraph(g,vertex.color="gray",vertex.label.color="black",vertex.frame.color=NA,vertex.size=5*V(g)$size,width=E(g)$weight,layout=layout_with_dh,edge.color="#909090")
+
 ```
 # Dotplot groups DEG
 ```{r}
@@ -271,7 +283,38 @@ markers<-list("Immune regulation"=c("BSG","PDCD1","CD274","PDCD1LG2","TGFB1","IL
 markers<-markers%>%reshape2::melt()%>%mutate(marker=value)%>%select(-value)%>%deframe()
 
 temp%>%ggplot(aes(x=has_LA,y=features.plot,size = pct.exp,colour = avg.exp.scaled,group = feature.groups))+geom_point()+scale_color_viridis_c(option = 'H')+facet_grid(cols=vars(id),rows = vars(feature.groups),scales = "free_y",space = "free")+theme_classic(base_size = 14)+theme(strip.text.x = element_text(angle = 55,vjust = .5,hjust = .5),strip.background = element_blank(),strip.text.y = element_text(angle = 0))+labs(x="has LA",y="",col="Average\nexpression",size="Percent\nexpressed")+ggtitle("Scaled per LA group")
-
+```
+#LA_bioinfo: 228
+```{r}
+sc<-subset(sc,cells = which(!is.na(sc$Final_Immune_Cluster_ID)))
+markers<-list("B-cells"=c("MS4A1","CD19","IGHD","IGHM","BCL2","BCL6","CD24","CD27",
+                          "CD38","SDC1","PRDM1","CD69","CD70","CD80","CD86"),
+            "NK cells"=c("NCAM1","FCGR3A","NCR1","SPN","GZMA","PRF1","KLRD1","KIR3DL1"),
+            "T-cells"=c("CD3D","TRAC","TRIB1","CD8A"),
+            "CM/EM/RM"= c("SELL","CCR7","CD69","IL7R","CD44"),
+            Exhausted=c("LAG3","PDCD1","CTLA4","TIGIT"),
+            "Gamma-delta T-cells"=c("TRDC","TRGC1","KLRK1"),
+            Th17=c("CD4","RORC","IL17A"),
+            Th2=c("CD4","GATA3"),
+            "Mast cells"=c("KIT","TPSAB1"),
+            Myeloid=c("LYZ","PSAP"),
+            DC=c("HLA-DQA1","CD74","FCER1A","CD1C","CLEC10A"),
+            M1=c("CD36","S100A8","NOS2","CXCL10"),
+            M2=c("IL10","VEGFA","CCL13","CCL20"),
+            "checkpoint/Immune regulators"=c("CD274","PDCD1LG2","VSIR","IDO1"))
+plots<-lapply(markers,function(x) 
+  DotPlot(sc,features = x,group.by = "Final_Immune_Cluster_ID",split.by = "has_LA"))
+names(plots)<-names(markers)
+temp<-lapply(names(plots), function(x) plots[[x]]$data%>%mutate(phenotype=x))%>%bind_rows()
+temp<-temp%>%mutate(celltype=str_remove(id,"_.+"),has_LA=str_remove(id,".+_"))
+cellorder<-sc@meta.data%>%
+  distinct(harmonized_major_plus_immune_cell_type,harmonized_major_cell_type)%>%
+  mutate(harmonized_major_cell_type=ifelse(harmonized_major_plus_immune_cell_type=="Early Exhausted CD8 T-cells (2)","T cells",harmonized_major_cell_type))%>%
+  arrange(harmonized_major_cell_type)
+cellorder<-cellorder[c(1,9,2:8,10:nrow(cellorder)),]
+temp<-temp%>%mutate(celltype=factor(celltype,levels=cellorder$harmonized_major_plus_immune_cell_type),
+                    phenotype=factor(phenotype,levels=names(markers)))
+temp%>%ggplot(aes(y=has_LA,x=features.plot,col=avg.exp,size=pct.exp))+geom_point()+facet_grid(cols=vars(phenotype),rows=vars(celltype),scales = "free",space = "free",switch = 'y')+scale_color_viridis_c(option = "H")+theme_light()+theme(strip.background = element_blank(),axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),strip.text.y.left = element_text(angle = 0,colour = "black",vjust = .5,hjust = 1),strip.text.x = element_text(colour = "black"))+scale_y_discrete(position = "right")
 ```
 # SCENIC plot
 ```{r}
@@ -320,3 +363,20 @@ targets<-lapply(i, get_targets)
 names(targes)<-i
 DotPlot(subset(sc,cells = which(sc$harmonized_major_cell_type=="B cells")),features = targets$KLF6,group.by = "has_LA")+coord_flip()+scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+ggtitle("KLF6 regulon")
 oraRes<-lapply(targets,function(x) enricher(x,TERM2GENE = m_df)%>%as.data.frame()%>%filter(Count>1))
+
+```
+# B cells
+```{r}
+sc<-subset(sc,cells = which(sc$harmonized_major_cell_type=="B cells"))
+temp<-FetchData(sc,vars=c("IGHD","CD27"))
+temp<-temp%>%mutate(subB=case_when(IGHD<0.9&CD27<0.5~"Double negative",IGHD>0.9&CD27<0.5~"Naive",IGHD<0.9&CD27>0.5~"Class switch memory and PB/PC",IGHD>0.9&CD27>0.5~"Non-class-switch memory"))
+
+temp<-m_df%>%filter(str_detect(gs_name,"TOLL"))
+temp<-split(temp,f = temp$gs_name)%>%lapply(function(x) x$gene_symbol)
+sc<-AddModuleScore(sc,features = temp)
+colnames(sc@meta.data)[173:175]<-names(temp)
+
+p0<-DotPlot(sc,features = colnames(sc@meta.data)[c(173:175,177:179)],group.by = "subB",scale = F)+scale_color_viridis_c()+ggtitle("All 4 classes")+scale_size(range = c(3,6))+theme(axis.text.x = element_text(angle=90,vjust = 1,hjust = 1))
+p1<-DotPlot(subset(sc,cells=which(sc$subB=="Double negative"&!is.na(sc$has_LA))),features = colnames(sc@meta.data)[c(173:175,177:179)],group.by = "has_LA",scale = F)+scale_color_viridis_c()+ggtitle("PE only")+scale_size(range = c(3,6))+theme(axis.text.x = element_text(angle=90,vjust = 1,hjust = 1))
+
+```

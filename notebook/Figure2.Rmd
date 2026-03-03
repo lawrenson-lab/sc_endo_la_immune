@@ -81,11 +81,6 @@ dev.off()
 
 # Composition heatmap
 ```{r}
-#discard single slide domains & qc failing cells
-#i<-metadata%>%distinct(dom_nEndoh1_75,Run_Tissue_name)%>%
-#  add_count(dom_nEndoh1_75)%>%filter(n==1)%>%select(dom_nEndoh1_75)%>%unlist()
-#metadata<-metadata%>%filter(!dom_nEndoh1_75%in%i)
-
 compo<-metadata%>%
   count(dom_nEndoh1_75,cl_corrected)%>%
   group_by(dom_nEndoh1_75)%>%
@@ -131,7 +126,6 @@ pA4<-compo%>%#mutate(dom=factor(dom,levels=c(6:1,"Total")))%>%
           axis.line.y = element_blank(),plot.margin=grid::unit(c(0,3,0,-6), "mm"),
           legend.position = "bottom",legend.direction = "vertical")+
     scale_fill_manual(values = classcols)
-plot_grid(pA1,pA2,pA+theme(legend.position = "top"),pA3,pA4,ncol=5,rel_widths = c(.05,.05,.4,.3,.2),align = "h",axis = "tb")
 
 
 ```
@@ -139,72 +133,84 @@ plot_grid(pA1,pA2,pA+theme(legend.position = "top"),pA3,pA4,ncol=5,rel_widths = 
 
 # Domain signature 
 ```{r}
-temp<-meta%>%distinct(protodomain,dom_nEndoh1_75)
-temp<-temp%>%split(temp$dom_nEndoh1_75)%>%sapply(function(x) 
-  rowMeans(metagenes[,x$protodomain]))
-temp<-t(scale(t(temp)))
-temp<-temp%>%as.data.frame()%>%rownames_to_column("probe")%>%
-  pivot_longer(-1,names_to = "domain",values_to = "zscore")
-temp<-temp%>%filter(str_detect(probe,"Chann",negate = T))
+mat<-data.table::fread("PE.csv")
+mat<-data.table::fread("endometrium.csv")%>%bind_rows(mat)
 
-pB<-temp%>%ggplot(aes(x=domain,y=zscore))+geom_violin()+
-  geom_jitter(width=0.1)+geom_text_repel(data=temp%>%group_by(domain)%>%
-                                           slice_max(zscore,n=3),
-          aes(x=domain,y=zscore,label=probe),nudge_x = .2)+theme_classic()
+metadata<-metadata%>%mutate(gr=paste0(Run_Tissue_name,":",dom_nEndoh1_75))
+temp<-metadata%>%split(f = metadata$gr)%>%
+  sapply(function(x) mat%>%filter(cell_ID%in%x$cell_ID)%>%
+           select(-cell_ID)%>%colMeans)
+submeta<-metadata%>%distinct(Run_Tissue_name,dom_nEndoh1_75,Class,gr)
+bulk<-CreateSeuratObject(counts = temp[,submeta$gr],meta.data = submeta)
+bulk<-NormalizeData(bulk)
+bulk<-FindVariableFeatures(bulk,nfeatures = 50)
+bulk<-ScaleData(bulk)
+bulk<-RunPCA(bulk)
+bulk<-harmony::RunHarmony(bulk,group.by.vars="Run_Tissue_name")
+bulk<-RunUMAP(bulk,dims = 1:10,reduction = "harmony",reduction.name = "harmonized_umap")
+domDEG<-FindAllMarkers(object = bulk,group.by = "dom_nEndoh1_75",test.use = "LR")
 
-save(hm,lgd,lgd2,pA,pA0,pB,file = "docs/Fig2.RData")
-#plot_grid(pA0,pA,pB,ncol=3,align = 'h',axis = 'tb',rel_widths = c(.2,.2,.6))
+domDEG<-pA$data%>%distinct(index,dom_nEndoh1_75)%>%
+  mutate(dom_nEndoh1_75=as.character(dom_nEndoh1_75))%>%
+  inner_join(domDEG,by = c("dom_nEndoh1_75"="cluster"))
+i<-domDEG%>%filter(str_detect(gene,"Chann|IgG",negate = T)&p_val_adj<0.05)%>%group_by(index)%>%slice_max(avg_log2FC,n=3)
+pB<-domDEG%>%filter(gene%in%i$gene)%>%
+  mutate(gene=factor(gene,levels = i$gene))%>%
+  ggplot(aes(y=index,x=gene,col=avg_log2FC,size=p_val_adj))+
+  geom_point()+scale_size(range=c(5,1),trans = "sqrt",
+                          breaks = c(0,1e-4,1e-2,1))+
+  theme_classic()+scale_color_gradient2(low="blue",high = "red")+
+  theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
+  labs(x="Protein",y="Domain",col="LFC",size="Padj")
 
-```
-## complex signature
-```{r}
-temp<-meta%>%distinct(protodomain,dom_nEndoh1_75,merged_corrected)%>%mutate(gr=paste0(dom_nEndoh1_75,":",merged_corrected))
-temp<-temp%>%split(temp$gr)%>%sapply(function(x) 
-  rowMeans(metagenes[,x$protodomain]))
-temp<-temp[str_detect(rownames(temp),"Chann",negate=T),]
-
-temp1<-as.data.frame(cbind(name=colnames(temp),dom=str_remove(colnames(temp),":.+"),celltype=str_remove(colnames(temp),".+:")))
-nobatch<-sva::ComBat(temp,batch = temp1$dom,par.prior = T)
-Heatmap(t(scale(t(nobatch))),name="z",column_split = str_remove(colnames(temp),".+:"),column_labels = str_remove(colnames(temp),":.+"))
+partA<-plot_grid(pA1,pA2,pA+theme(legend.position = "top"),pA3,pA4,pB,ncol=6,rel_widths = c(.05,.05,.3,.15,.15,.3),align = "h",axis = "tb")
+save(pA,pA1,pA2,pA3,pA4,pB,pD,pD1,dombars,cellbars,file = "docs/Fig2.RData")
 
 ```
 # Example space plots: squidpy
-#   Cell composition contrast
+# Cell composition contrast
 ```{r}
 dombars<-lapply(names(classcols),function(x)
-    meta%>%filter(Class==x)%>%count(Class,dom_nEndoh1_75)%>%
+    metadata%>%filter(Class==x)%>%count(Class,dom_nEndoh1_75)%>%
         ggplot(aes(y=Class,x=n,fill=as.factor(dom_nEndoh1_75)))+
         geom_bar(stat="identity",position="fill")+
         theme_void(base_size = 14)+scale_fill_manual(values=domcol)+
       labs(x="%",y="",fill="domain")+theme(legend.position="none")+
       ggtitle(x))
+names(dombars)<-names(classcols)
 cellbars<-lapply(names(classcols),function(x)
-    meta%>%filter(Class==x)%>%count(Class,merged_corrected)%>%
-        ggplot(aes(y=Class,x=n,fill=merged_corrected))+
+    metadata%>%filter(Class==x&cl_corrected!="unknown")%>%count(Class,cl_corrected)%>%
+        ggplot(aes(y=Class,x=n,fill=cl_corrected))+
         geom_bar(stat="identity",position="fill")+
         theme_void()+scale_fill_manual(values=cellcols)+
       labs(x="%",y="",fill="domain")+theme(legend.position="none"))
+names(cellbars)<-names(classcols)
 
-temp<-meta%>%count(Class,dom_nEndoh1_75,merged_corrected)
-dombars1<-lapply(names(classcols),function(x)
-    temp%>%filter(Class==x)%>%ggplot(aes(x=n,y=as.factor(dom_nEndoh1_75),fill=merged_corrected))+
-        geom_bar(stat="identity",position="fill")+
-        theme_classic(base_size = 14)+scale_fill_manual(values=cellcols)+
-        labs(x="%",y="",fill="domain")+
-        theme(legend.position="none",axis.line = element_blank(),
-              axis.ticks.y = element_blank()))
-names(dombars1)<-names(dombars)<-names(cellbars)<-names(classcols)
-pC<-plot_grid(dombars$`Eutopic endometrium`,cellbars$`Eutopic endometrium`,
-              dombars1$`Eutopic endometrium`,nrow=3,rel_heights = c(.2,.1,.7),
-              align="v",axis = "lr")
-pC1<-plot_grid(dombars$`Peritoneal endometriosis`,cellbars$`Peritoneal endometriosis`,
-               dombars1$`Peritoneal endometriosis`,nrow=3,rel_heights = c(.2,.1,.8),
-               align="v",axis = "lr")
+temp<-metadata%>%count(Class,dom_nEndoh1_75,cl_corrected)
+temp<-pA$data%>%distinct(index,dom_nEndoh1_75)%>%inner_join(temp)
+pD<-temp%>%filter(cl_corrected!="unknown")%>%
+  mutate(Class=factor(Class,levels=c("Eutopic endometrium","Peritoneal endometriosis")),
+         index=factor(index,levels=6:1))%>%
+  ggplot(aes(y=Class,x=n,fill =cl_corrected))+geom_bar(stat="identity",position="fill")+
+  facet_wrap(~index,ncol=3)+scale_fill_manual(values=cellcols)+
+  theme_classic()+theme(strip.background = element_blank(),
+                        strip.text.y = element_text(angle=0),
+                        legend.position = "left")+
+  labs(x="Proportion",fill="Cell type")
 
+partD<-plot_grid(dombars$`Eutopic endometrium`,cellbars$`Eutopic endometrium`,
+          dombars$`Peritoneal endometriosis`,cellbars$`Peritoneal endometriosis`,nrow=2,ncol=2,align="vh",axis = "lr")
+
+pD1<-temp%>%filter(cl_corrected!="unknown")%>%
+  group_by(index,cl_corrected)%>%summarise(n=sum(n))%>%
+  ggplot(aes(x=n,y=index,fill=cl_corrected))+
+  geom_bar(stat="identity",position="fill")+
+  scale_fill_manual(values=cellcols)+
+  theme_void()+theme(legend.position = "n")
 #test
-temp<-split(meta,f = meta$dom_nEndoh1_75)
+temp<-split(metadata,f = metadata$dom_nEndoh1_75)
 props<-lapply(temp,function(x) 
-  getTransformedProps(x$merged_corrected,
+  getTransformedProps(x$cl_corrected,
                       x$Run_Tissue_name))
 temp<-lapply(temp,function(x)
   x%>%distinct(Class,Run_Tissue_name)%>%
@@ -222,6 +228,7 @@ res<-lapply(1:6, function(x)
   res[[x]]%>%as.data.frame()%>%
     rownames_to_column("cell_type")%>%
     mutate(dom=x))%>%bind_rows()
+#nothing is significant
 ```
 # Neighbors
 ```{r}
@@ -291,68 +298,11 @@ pE<-edges%>%ggplot(aes(x=as.factor(dom_to),y=distance,col=as.factor(dom_to)))+
 #plot_grid(partA,partB,nrow = 2,rel_heights = c(.3,.7))
 #dev.off()
 ```
-#######################################################################################
-# Domain plot
-```{r}
-#temp<-split(metadata,by="Run_Tissue_name")%>%
-#  lapply(function(x) x[sample(1:nrow(x),10000),])
-dom6<-metadata%>%filter(dom_nEndoh1_75==6)
-temp<-dom6%>%split(by="Run_Tissue_name")
 
 
-get_expre<-function(sample_name){
-  fname<-paste0("docs/",sample_name,"asinh.csv")
-  mat<-data.table::fread(fname)
-  mat<-mat%>%as.data.frame()%>%column_to_rownames("probe")
-  mat<-mat[,temp[[sample_name]]$cell_id]
-  colnames(mat)<-paste0(sample_name,colnames(mat))
-  return(mat)}
-dom_mat<-lapply(names(temp),function(x) get_expre(x))
 
-dom_mat<-do.call(cbind,dom_mat)
-temp<-do.call(rbind,temp)%>%
-  mutate(colname=paste0(Run_Tissue_name,cell_id))
-dom_mat<-dom_mat<-dom_mat[,temp$colname]
 
-#umap
-#options(future.globals.maxSize = 30000 * 1024^2,future.seed=TRUE)#!!!
-#Do we want seurat style plots?
-#seuobj<-CreateSeuratObject(counts=dom_mat,
-#                           meta.data = temp,
-#                           project = "cosmx",
-#                           assay = "protein")
-#seuobj <- NormalizeData(seuobj,normalization.method = "LogNormalize",verbose=T)
-#seuobj[["protein"]] <- split(seuobj[["protein"]], f = seuobj$Run_Tissue_name)
-#seuobj<- FindVariableFeatures(seuobj, assay = "protein",
-#                              nfeatures = 67, layer = "counts.1019F1-PT9")#force it to use all protes
-#seuobj <- ScaleData(seuobj,features = rownames(seuobj),verbose=F)
-#seuobj <- RunPCA(seuobj,features = rownames(seuobj),npcs=30,verbose=F)
-#seuobj <- IntegrateLayers(
-#  object = seuobj, method = RPCAIntegration,
-#  orig.reduction = "pca", new.reduction = "integrated.rpca",
-#  normalization.method ="LogNormalize",
-#  k.filter=50,#neighbors to use when filtering anchors, default 200
-#  k.anchor=20,#neighbors for picking anchors, default: 5, for 120k cells vignette uses 20
-#  k.weight=30,#neighbors for weighting anchors, default 100
-#  reference=14,#BEME596
-#  features = rownames(seuobj),
-#  verbose = T)
-#seuobj <- RunUMAP(seuobj, reduction = "integrated.rpca",
-#                  dims = 1:30, return.model = F, )
 
-nobatch<-ComBat(dom_mat,batch = temp$Run_Tissue_name,par.prior = T)
-scaled<-t(scale(t(nobatch)))
-temp<-temp%>%split(by="merged_corrected")
-scaled<-lapply(temp, function(x) scaled[,x$cell_ID])
-scaled_ClassAvg_ct<-lapply(names(temp), function(x) temp[[x]]%>%
-                             split(by="Class")%>%sapply(function(y) 
-                               rowMeans(scaled[[x]][,y$cell_ID])))
-names(scaled_ClassAvg_ct)<-names(scaled)
-hms<-lapply(names(scaled_ClassAvg_ct),function(x) 
-  Heatmap(scaled_ClassAvg_ct[[x]],name="sample corrected\nscaled\ncell type\navg per Class",
-          cluster_columns = F,column_title = x))
-names(hms)<-names(scaled)
-```
 
 ## Menstrual cycle
 ```{r}

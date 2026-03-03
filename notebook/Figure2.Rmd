@@ -9,6 +9,8 @@ library(circlize)
 library(ggpubr)
 library(ggrepel)
 library(speckle)
+library(limma)
+library(ggridges)
 
 domcol <- c( "gray13", "gold2", "plum4", "darkorange1", "lightskyblue2", "maroon", "burlywood3")
 names(domcol)<-1:7
@@ -232,11 +234,11 @@ res<-lapply(1:6, function(x)
 ```
 # Neighbors
 ```{r}
-files<-list.files("docs",full.names = T)
+files<-list.files("nets",full.names = T)
 files<-files[str_detect(files,"delau")]
 
 edges<-lapply(files, read_csv)
-names(edges)<-str_remove_all(files,"docs/|delaunay.+")
+names(edges)<-str_remove_all(files,"nets/|delaunay.+")
 edges<-lapply(names(edges), function(x) 
   edges[[x]]%>%mutate(Run_Tissue_name=x))%>%bind_rows()
 edges<-edges%>%filter(distance<=0.1)
@@ -253,42 +255,54 @@ edges<-meta%>%distinct(Run_Tissue_name,Class)%>%right_join(edges)
 edges<-edges%>%mutate(homodom=dom_to==dom_from,
                       homotypic=type_from==type_to)
 
-edges<-edges%>%filter(homodom==TRUE)
-temp<-edges%>%count(dom_to,type_from,type_to,homotypic)%>%
-  filter(type_from!="",type_to!="")
-temp<-temp%>%group_by(dom_to)%>%mutate(total=sum(n),prop=100*n/total)
+edges1<-edges%>%filter(homodom==TRUE)
+temp<-edges1%>%count(dom_to,type_from,type_to,homotypic)%>%
+  filter(!(type_from=="unknown"|type_to=="unknown"))
 temp$edge_type<-apply(temp,1,function(x) paste0(sort(x[2:3]),collapse = " - "))
 temp<-temp%>%mutate(name_from=str_remove(edge_type," -.+"),name_to=str_remove(edge_type,".+- "))
+temp<-temp%>%group_by(dom_to,edge_type)%>%mutate(n=sum(n))%>%
+  select(-c(type_to,type_from))%>%distinct()
+temp<-temp%>%group_by(dom_to)%>%
+  mutate(total=sum(n),prop=100*n/total)%>%ungroup()
 
-pF<-temp%>%group_by(type_from,type_to)%>%slice_max(prop)%>%
-    mutate(name_to=factor(name_to,levels = c("Plasma cells","NK cells","Myeloid cells","Mesenchymal cells","Epithelial cells","Endothelial cells","CD8 T cells","CD4 T cells","B cells" )))%>%
-    ggplot(aes(y=name_from,x=name_to,col=as.factor(dom_to),size=prop))+
-    geom_point()+
-    scale_color_manual(values=domcol)+
-    scale_size(range = c(1,8),breaks = c(80,40,20,10,5))+
-    theme_classic()+
-    theme(axis.line.y = element_blank(),
-          axis.ticks.y = element_blank())+
-    labs(x="",y="")+guides(col="none")
-temp<-temp%>%group_by(dom_to)%>%mutate(total=sum(n),prop=100*n/total)
-pD1<-temp%>%group_by(dom_to)%>%arrange(prop)%>%mutate(i=1:81)%>%
-  ggplot(aes(x=i,y=prop,col=factor(dom_to),group = dom_to))+
-  geom_point(aes(size=prop))+geom_line()+
+temp<-pA$data%>%distinct(index,dom_nEndoh1_75)%>%
+  right_join(temp,by=c("dom_nEndoh1_75"="dom_to"))
+pF<-temp%>%group_by(edge_type)%>%slice_max(prop)%>%
+  mutate(name_to=factor(name_to,levels = c("Stroma","Plasma cells",
+                                           "NK cells","Myeloid cells",
+                                           "Epithelial","CD8 T cells",
+                                           "CD4 T cells","B cells")))%>%
+  ggplot(aes(x=name_from,y = name_to,col=as.factor(index),size=prop))+
+  geom_point()+scale_color_manual(values=domcol)+
+  scale_size(range = c(1,8),trans="sqrt",breaks = c(1,25,50,75))+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
+  labs(x="from",y="to")
+
+temp<-temp%>%group_by(index)%>%mutate(total=sum(n),prop=100*n/total)
+pF1<-temp%>%ggplot(aes(y=prop,x=index,col=as.factor(index)))+
+  geom_violin()+geom_boxplot(width=.1)+
+  geom_text_repel(data=temp%>%filter(prop>10),
+                  aes(label=edge_type))+
+  labs(x="domain",y="interaction partners")+scale_y_sqrt()+
   scale_color_manual(values=domcol)+theme_classic()+
-  scale_x_sqrt()+scale_y_sqrt()+
-  theme(axis.text.x = element_blank(),axis.ticks.x = element_blank())+
-  labs(x="interacting partners",y="%",size="%")+guides(col="none")
+  theme(legend.position = "n")
 
 #density
-pE<-edges%>%ggplot(aes(x=as.factor(dom_to),y=distance,col=as.factor(dom_to)))+
-  geom_violin()+
-  geom_boxplot(width=0.1)+scale_y_log10()+
-  scale_colour_manual(values=domcol)+theme_minimal()+
-  labs(x="",y="Distance between nuclei")+
-  stat_compare_means(method = "wilcox.test",label="p.signif",
-                     comparisons = list(c(1,6),c(2,6),c(3,6),c(4,6),c(5,6)),
-                     alternative="g")+theme(legend.position="none")
-
+temp<-edges1%>%group_by(dom_to,Run_Tissue_name,type_to,type_from)%>%
+  summarise(avg_dist=mean(distance))
+temp<-pA$data%>%distinct(index,dom_nEndoh1_75)%>%
+  right_join(temp,by=c("dom_nEndoh1_75"="dom_to"))
+i<-temp%>%filter(dom_nEndoh1_75==6)%>%ungroup()%>%
+  select(avg_dist)%>%unlist()%>%median()
+pE<-temp%>%ggplot(aes(x=avg_dist,y=as.factor(index),
+                      fill=as.factor(index),col=as.factor(index)))+
+  geom_density_ridges()+geom_vline(xintercept = i)+
+  scale_fill_manual(values = domcol)+
+  scale_colour_manual(values = domcol)+xlim(c(0,.05))+
+  theme_classic()+labs(x="Avg. Dist.",y="Domain")+
+  theme(legend.position = "n",axis.line.y = element_blank(),
+        axis.ticks.y = element_blank())
 #partA<-plot_grid(hm,plot_grid(pB,NULL,nrow = 2,rel_heights = c(.95,.05)))
 #partA<-plot_grid(partA,plot_grid(lgd,lgd2,lgd1,ncol=3),nrow=2,rel_heights = c(.8,.2))
 #partA<-plot_grid(partA,pC,pC1,ncol=3,rel_widths = c(.6,.2,.2))

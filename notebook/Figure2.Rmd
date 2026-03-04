@@ -17,7 +17,7 @@ names(domcol)<-1:7
 classcols = c("Eutopic endometrium" = "#c2a5cf", 
               "Peritoneal endometriosis" = "#d9f0d3")
 cellcols<-c("#8DB600","#fdae61","#a95f96","#0067A5","#604E97",
-            "#f46d43","hotpink","#BE0032","cornflowerblue")
+            "#f46d43","black","#BE0032","cornflowerblue")
 names(cellcols)<-c("B cells","Plasma cells","CD4 T cells","CD8 T cells",
                    "NK cells","Myeloid cells","unknown","Epithelial","Stroma")
 dominantcols<-c(Epithelial="#BE0032",Stroma="cornflowerblue",Immune="forestgreen")
@@ -102,7 +102,7 @@ pA<-compo%>%filter(cl_corrected!="unknown")%>%
     geom_tile()+scale_fill_viridis_c(option = "F",direction = -1,trans="sqrt")+
     theme_minimal()+labs(x="Cell type",y="Domain",fill="%")+
     theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))
-pA1<-compo%>%ggplot(aes(x=1,y=index,fill=as.factor(dom_nEndoh1_75)))+
+pA1<-compo%>%ggplot(aes(x=1,y=index,fill=as.factor(index)))+
     geom_bar(stat="identity",position = "fill")+
     scale_fill_manual(values = domcol)+theme_void()+
     theme(legend.position = "n")
@@ -165,8 +165,6 @@ pB<-domDEG%>%filter(gene%in%i$gene)%>%
   theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
   labs(x="Protein",y="Domain",col="LFC",size="Padj")
 
-partA<-plot_grid(pA1,pA2,pA+theme(legend.position = "top"),pA3,pA4,pB,ncol=6,rel_widths = c(.05,.05,.3,.15,.15,.3),align = "h",axis = "tb")
-save(pA,pA1,pA2,pA3,pA4,pB,pD,pD1,dombars,cellbars,file = "docs/Fig2.RData")
 
 ```
 # Example space plots: squidpy
@@ -303,14 +301,13 @@ pE<-temp%>%ggplot(aes(x=avg_dist,y=as.factor(index),
   theme_classic()+labs(x="Avg. Dist.",y="Domain")+
   theme(legend.position = "n",axis.line.y = element_blank(),
         axis.ticks.y = element_blank())
-#partA<-plot_grid(hm,plot_grid(pB,NULL,nrow = 2,rel_heights = c(.95,.05)))
-#partA<-plot_grid(partA,plot_grid(lgd,lgd2,lgd1,ncol=3),nrow=2,rel_heights = c(.8,.2))
-#partA<-plot_grid(partA,pC,pC1,ncol=3,rel_widths = c(.6,.2,.2))
-#partB<-plot_grid(hm1,pD,NULL,nrow = 3,rel_heights = c(.3,.5,.2))
-#partB<-plot_grid(NULL,partB,rel_widths = c(.6,.4))
-#pdf("fig2.pdf",width = 21,height = 15)
-#plot_grid(partA,partB,nrow = 2,rel_heights = c(.3,.7))
-#dev.off()
+
+
+partA<-plot_grid(pA1,pA2,pA+theme(legend.position = "top"),pA3,pA4,pB,ncol=6,rel_widths = c(.05,.05,.3,.15,.15,.3),align = "h",axis = "tb")
+partB<-plot_grid(pD,plot_grid(pE,partD),plot_grid(pF,pF1),nrow = 3)
+pdf("temp.pdf",width = 13,height = 9)
+ plot_grid(partA,plot_grid(pD1,partB,rel_widths = c(.4,.6)),nrow = 2,rel_heights = c(.3,.7))
+dev.off()
 ```
 
 

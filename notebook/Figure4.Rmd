@@ -1,16 +1,15 @@
 ---
 title: "Fig.4"
 ---
-## CellChat to next fig?
 ```{r}
 library(Seurat)
-library(msigdbr)
-library(clusterProfiler)
+#library(clusterProfiler)
 library(CellChat)
 library(ggrepel)
 library(ggpubr)
-library(limma)
+#library(limma)
 library(introdataviz)
+library(ggtext)
 
 
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
@@ -20,162 +19,108 @@ sc@meta.data<-sc@meta.data%>%mutate(has_LA=ifelse(LA_per_Sample>0,"LA+","LA-"))
 Idents(sc)<-sc$has_LA
 aux_table<-sc@meta.data
 
-cellcols<-c("#BE0032","#66c2a5","cornflowerblue","#f46d43","#8DB600",
-            "#fdae61","#a95f96","#d53e48","#0067A5","#604E97")
-names(cellcols)<-c("Epithelial cells","Endothelial cells","Mesenchymal cells","Myeloid cells","B cells",
-                   "Plasma cells","CD4 T cells","NK cells","CD8 T cells","Immune")
-
+cellcols<-c("#8DB600","#fdae61","#a95f96","#0067A5","#604E97",
+            "#f46d43","black","#BE0032","cornflowerblue")
+names(cellcols)<-c("B cells","Plasma cells","CD4 T cells","CD8 T cells",
+                   "NK cells","Myeloid cells","unknown","Epithelial","Stroma")
+lacols<-c("LA+"="#8DB600","LA-"="#f46d43",none="black")
 ```
-
-# Effect on non-immune cells
+# Dotplot of relevant genes
 ```{r}
+gsea_bp<-read_csv("docs/has_laDEG-imm100_GSEABP_simplify.csv")
+deg<-read_csv("docs/has_laDEG-bulk-MAST.tsv")
 
+i<-gsea_bp%>%filter(NES>0)%>%add_count(Description)%>%
+  filter(n>4)%>%distinct(Description)%>%unlist()
+i<-gsea_bp%>%filter(Description%in%i)%>%
+  separate_rows(core_enrichment,sep = "/")%>%
+  distinct(core_enrichment,celltype)%>%
+  add_count(core_enrichment)%>%filter(n>1)%>%
+  distinct(core_enrichment)%>%unlist()
+i<-deg%>%filter(gene%in%i)%>%group_by(gene)%>%
+  summarise(up_in=sum(avg_log2FC>1),
+            median_LFC=median(avg_log2FC))%>%
+  filter(up_in>11&median_LFC>1)%>%distinct(gene)%>%unlist()
+#i<-deg%>%filter(p_val_adj<0.05&avg_log2FC>1)%>%distinct(gene)%>%unlist()%>%c(i)
 
-#enepi<-sc@meta.data%>%filter(!is.na(published_epithelial_subtype)&epithelial_subcluster_type=="EnEpi cells")%>%rownames()
-#ens<-sc@meta.data%>%filter(!is.na(published_mesenchymal_subtype)&mesenchymal_subcluster_type=="EnS cells")%>%rownames()
-#ens<-subset(sc,cells = ens)
-#enepi<-subset(sc,cells = enepi)
-
-#deg<-lapply(list(ens,enepi), function(x) 
-#  FindMarkers(x,ident.1 = "TRUE",ident.2 = "FALSE",test.use="MAST"))
-#names(deg)<-c("ens","enepi")
-#deg<-lapply(names(deg),function(x) deg[[x]]%>%rownames_to_column("gene")%>%mutate(cell_type=x))%>%bind_rows()
-#write_csv(deg,file = "docs/has_laDEG.csv")
-
-deg<-data.table::fread("docs/has_laDEG-ct100-MAST.tsv")#all EnEpi/Ens not jut the ones with subtypes
-deg<-deg%>%filter(str_detect(cell_type,"EnS|EnEp|theli|Mesen|Smoot"))
-deg<-deg%>%mutate(STATUS=case_when(avg_log2FC<=-1&p_val_adj<0.05~"LA-",
-                                   avg_log2FC>1&p_val_adj<0.05~"LA+",TRUE~"NOT.SIG"))
-
-#temp<-deg%>%count(STATUS,cell_type)%>%filter(STATUS!="NOT.SIG")%>%
-#         mutate(n=ifelse(STATUS=="LA-",-n,n))
-#pB<-temp%>%ggplot(aes(y=cell_type,x=n,fill=STATUS))+geom_col()+
-#    theme_classic()+labs(x="DEG",y="",fill="higher on")+
-#    scale_fill_manual(values=c("gray","black"))+
-#    theme(legend.position = "bottom")+
-#    scale_x_continuous(breaks = pretty(temp$n),labels=abs(pretty(temp$n)))
-temp<-deg%>%filter(STATUS!="NOT.SIG")%>%count(cell_type,STATUS)%>%
-  pivot_wider(names_from = STATUS,values_from = n)%>%column_to_rownames("cell_type")
-temp<-temp[,c("LA-","LA+")]
-pB<-Heatmap(temp,rect_gp = gpar(col = "white", lwd = 2),
-            cell_fun = function(j, i, x, y, w, h, col) { 
-              grid.text(temp[i, j], x, y,gp = gpar(fontsize = 10))},
-            cluster_rows = F,cluster_columns = F,col=colorRamp2(c(800,400,100,50,10,0),                                                  c("#14081D","#651B79","#de7065ff","#FFC28B","#FCFDBF","white")),
-            show_heatmap_legend = F,column_names_rot  = 0,row_names_side = "left",
-            column_title = "DEG")
-
-deg%>%filter(str_detect(cell_type,"EnS|Endo"))%>%
-    ggplot(aes(x=avg_log2FC,y=-log10(p_val_adj),col=STATUS,size=pct.1))+geom_point()+
-    geom_text_repel(data=deg%>%filter(str_detect(cell_type,"EnS|Endo")&STATUS!="NOT.SIG"&pct.1>.5)%>%
-                        group_by(STATUS,cell_type)%>%slice_max(abs(avg_log2FC),n=5),
-                    aes(x=avg_log2FC,y=-log10(p_val_adj),col=STATUS,label=gene),show.legend = F)+
-    theme_bw()+theme(legend.position = "bottom",strip.background = element_blank(),legend.box = "vertical")+
-    scale_color_manual(values = c("darkgreen", "#b2182b","grey"))+
-    facet_grid(rows=vars(cell_type),scales="free_y")+
-    labs(x="LFC",y="log10(p-val)")
-
-gseares<-read_csv("docs/has_laDEG")
-gseares<-gseares%>%filter(str_detect(cell_type,"EnS|EnEp|theli|Mesen|Smoot"))
-gseares<-gseares%>%mutate(STATUS=ifelse(NES>0,"LA+","LA-"))
-temp1<-gseares%>%count(cell_type,STATUS)%>%
-  pivot_wider(names_from = STATUS,values_from = n)%>%
-  column_to_rownames("cell_type")
-temp1<-temp1[rownames(temp),colnames(temp)]
-pB1<-Heatmap(temp1,rect_gp = gpar(col = "white", lwd = 2),
-        cell_fun = function(j, i, x, y, w, h, col) { 
-            grid.text(temp1[i, j], x, y,gp = gpar(fontsize = 10))},
-        cluster_rows = F,cluster_columns = F,col=colorRamp2(c(30,15,5,1,0),                                                           c("#651B79","#de7065ff","#FFC28B","#FCFDBF","white")),
-        show_heatmap_legend = F,column_names_rot  = 0,row_names_side = "left",
-        column_title = "Pathways")
-pB<-grid.grabExpr(draw(pB+pB1))
-
-pC<-gseares%>%add_count(Description)%>%filter(n>1)%>%
-    ggplot(aes(x=cell_type,y=Description,size = p.adjust))+geom_point(aes(col=NES))+
-    scale_color_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
-    scale_size(range=c(8,1))+#,breaks = c(5*10e-5,5*10e-4,1),transform = "sqrt")+
-    theme_classic()+labs(x="",y="")+
-    theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))
-#i<-temp%>%filter(str_detect(Description,"humor|lipo"))%>%separate_rows(core_enrichment,sep = '/')%>%distinct(core_enrichment)%>%unlist()
-#i<-lapply(pairs, function(x) x%>%filter((ligand%in%j|receptor%in%j)&(source%in%c("EnEpi cells","EnS cells")|target%in%c("EnS cells","EnEpi cells"))))%>%bind_rows()
+pA<-deg%>%filter(gene%in%i)%>%
+  ggplot(aes(x=gene,y=ct,col=avg_log2FC,size=p_val))+geom_point()+
+  scale_size(range=c(5,.5),trans="log10")+
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  theme_classic()+theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
+  labs(y="",col="LFC",size="P-val")
 ```
-
 # Progeny
 ```{r}
-
 progeny<-data.table::fread("data/progeney_scores.tsv")
-progeny<-aux_table%>%rownames_to_column("Cell")%>%
-  select(Cell,harmonized_major_cell_type,has_LA)%>%inner_join(progeny)
-#progeny<-progeny%>%filter(harmonized_major_cell_type%in%c("EnEpi cells","EnS cells"))
+progeny<-aux_table%>%select(barcode,has_LA,harmonized_major_plus_immune_cell_type,SampleName)%>%inner_join(progeny)
 
-temp<-progeny%>%mutate(LA=ifelse(has_LA=="LA-","n","y"))%>%drop_na()
-temp<-split(temp,f = progeny$harmonized_major_cell_type)
-designM<-lapply(temp,function(x) model.matrix(~0+LA,data=x))
-fit<-lapply(names(temp),function(x) 
-  lmFit(temp[[x]]%>%select(Androgen:WNT)%>%t,designM[[x]]))
-names(fit)<-names(temp)
-cont<-lapply(designM,function(x) makeContrasts(LAy-LAn,levels = x))
-fit<-lapply(names(fit),function(x) contrasts.fit(fit[[x]],cont[[x]]))
-fit <- lapply(fit, eBayes,robust=TRUE)
-res<-lapply(fit,function(x) topTable(x,number = 17,coef = 1))
-names(res)<-names(temp)
-res<-lapply(names(res),function(x)
-  res[[x]]%>%rownames_to_column("pathway")%>%mutate(celltype=x))%>%bind_rows()
-#res%>%ggplot(aes(x=celltype,y=pathway,col=logFC,size=adj.P.Val))+geom_point()+scale_size(range=c(8,1))+scale_color_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+theme_minimal()+theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+ggtitle("Limma of progeny scores, PE only (LA+ - LA-)")
-
-i<-res%>%filter(adj.P.Val<0.01&str_detect(celltype,"EnS|EnEp|theli|Mesen|Smoot"))%>%
-  distinct(pathway,celltype)
 temp<-progeny%>%
-  select(Cell,harmonized_major_cell_type,has_LA,unique(i$pathway))%>%
-  pivot_longer(unique(i$pathway),names_to = "pathway",values_to = "activity")
-temp<-temp%>%right_join(i,by=c("harmonized_major_cell_type"="celltype","pathway"))
-pD<-temp%>%mutate(pathway=factor(pathway,levels=c("WNT","Estrogen","TGFb","Hypoxia")))%>%
-  ggplot(aes(x=harmonized_major_cell_type,fill=has_LA,y=activity))+
-  geom_split_violin()+facet_grid(~pathway)+theme_minimal()+
-  scale_fill_manual(values=c("gray","black"))+
-  theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
-        legend.position = "bottom")+labs(x="")
+  group_by(SampleName,has_LA,harmonized_major_plus_immune_cell_type)%>%
+  summarise(across(Androgen:WNT,sum))%>%ungroup()%>%
+  mutate(across(Androgen:WNT,function(x) sign(x)*log10(abs(x))))
+temp<-temp%>%pivot_longer(Androgen:WNT)
+temp1<-temp%>%group_by(harmonized_major_plus_immune_cell_type,name)%>%
+  wilcox_test(value~has_LA)
+#temp1$padj<-p.adjust(temp1$p,"fdr")#nothing is significant
+temp<-temp%>%group_by(name,has_LA,harmonized_major_plus_immune_cell_type)%>%
+  summarise(value=mean(value))
+temp<-temp%>%filter(value>0)%>%ungroup()%>%
+  distinct(name,harmonized_major_plus_immune_cell_type)%>%
+  inner_join(temp1)%>%filter(p<0.05)
+temp<-temp1%>%filter(name%in%c("TGFb","p53","WNT")&p<0.05)%>%
+  bind_rows(temp)%>%distinct(harmonized_major_plus_immune_cell_type,name)
+
+temp<-progeny%>%pivot_longer(Androgen:WNT)%>%inner_join(temp)
+
+pB<-temp%>%ggplot(aes(x=harmonized_major_plus_immune_cell_type,fill=has_LA,y=value))+
+    geom_split_violin()+facet_grid(~name,scales="free_x",space = "free")+theme_bw()+
+    scale_fill_manual(values=lacols)+geom_hline(yintercept = 0)+
+    theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
+          legend.position = "bottom",strip.background = element_blank(),
+          panel.grid = element_blank())+labs(x="",y="activity")
+
+plot_grid(pA,pB,rel_widths = c(.4,.6))
 ```
 
-
-
+# Cell chat
 ```{r}
-
 cc_res<-readRDS("data/CellChat_PE_hasLA_exclude.rds")
+temp<-rankNet(cc_res[[1]], mode = "comparison", measure = "count", 
+              sources.use = NULL, targets.use = NULL, stacked = T,
+              do.stat = TRUE,return.data = T)
+temp<-temp$signaling.contribution%>%as.data.frame()
+temp<-cc_res[[1]]@LR$`FALSE`$LRsig%>%
+  distinct(pathway_name,annotation)%>%
+  inner_join(temp,by=c("pathway_name"="name"))
+temp$padj<-p.adjust(temp$pvalues)
+temp<-temp%>%filter(annotation!="Non-protein Signaling"&
+                    contribution.relative.1!=Inf&
+                    !(pathway_name=="MHC-I"&annotation=="Secreted Signaling"))%>%
+  mutate(group=ifelse(group==T,"LA+","LA-"))
+i<-temp%>%filter(group=="LA+")%>%arrange(annotation,contribution.relative.1)
+temp<-temp%>%mutate(pathway_name=factor(pathway_name,levels=unique(i$pathway_name)))
+temp<-temp%>%group_by(pathway_name)%>%
+  slice_max(contribution)%>%
+  mutate(group=ifelse(padj>0.05,"none",group))%>%
+  ungroup()%>%add_count(pathway_name)%>%
+  mutate(group=ifelse(n==2,"none",group))%>%
+  mutate(groupcol=paste0("<span style='color:",
+                      lacols[group],";'>",pathway_name,"</span>"))%>%
+  distinct(pathway_name,groupcol)%>%right_join(temp)
 
-cc_res$`FALSE`<-netAnalysis_computeCentrality(cc_res$`FALSE`)
-cc_res$`TRUE`<-netAnalysis_computeCentrality(cc_res$`TRUE`)
-
-pA<-netAnalysis_diff_signalingRole_scatter(cc_res[-1],
-                                           x.measure = "outdeg_unweighted",
-                                           y.measure = "indeg_unweighted")
-temp<-pA$data
-
-
-i<-aux_table%>%
-  count(has_LA,harmonized_major_plus_immune_cell_type)%>%
-  filter(n<100)%>%
-  distinct(harmonized_major_plus_immune_cell_type)%>%
-  unlist()
-alt_cellcols<-CellChat::scPalette(26)
-alt_cellcols<-grDevices::colorRampPalette(alt_cellcols)(30)
-names(alt_cellcols)<-sort(unique(aux_table$harmonized_major_plus_immune_cell_type))
-names(alt_cellcols)<-str_replace(names(alt_cellcols),"-"," ")%>%str_remove("Plasmablast/")
-cellcols<-cellcols[sort(names(cellcols))]
-alt_cellcols[names(alt_cellcols)%in%names(cellcols)]<-cellcols[names(cellcols)%in%names(alt_cellcols)]
-names(alt_cellcols)<-sort(unique(aux_table$harmonized_major_plus_immune_cell_type))
-alt_cellcols<-alt_cellcols[names(alt_cellcols)%in%unique(sc$harmonized_major_plus_immune_cell_type)]
-
-temp<-temp%>%filter(!labels%in%i)
-i<-temp%>%filter(str_detect(labels,"Gamma|Endo|Smoo|M2|B|EnS|EnEp"))%>%distinct(labels)%>%unlist()
-pA<-temp%>%ggplot(aes(x=x,y=y,col=labels))+geom_point()+
-    geom_text_repel(data=temp%>%filter(labels%in%i),
-                    aes(x=x,y=y,label=labels),show.legend = F)+
-    theme_minimal(base_size = 14)+
-    geom_hline(yintercept = 0)+geom_vline(xintercept = 0)+
-    labs(x="Outgoing interactions",y="Incoming interactions")+
-    guides(col=guide_legend(ncol=1))+labs(col="cell type")+
-    scale_color_manual(values=alt_cellcols)
-
+pC<-temp%>%mutate(groupcol=factor(groupcol,levels=unique(groupcol)))%>%
+  ggplot(aes(x=groupcol,y=contribution,fill=group))+
+    geom_bar(stat="identity",position = "fill")+theme_minimal()+
+    facet_grid(~annotation,scales="free_x",space="free")+
+    theme(axis.text.x.bottom  = element_markdown(angle=45,vjust = 1,hjust = 1),
+          strip.background = element_blank())+
+    labs(x="Pathway",y="Contribution",fill="Status")+
+    scale_fill_manual(values=lacols)+
+    geom_hline(yintercept = .5,linetype = "dashed")
+```
+# maybe
+```{r}
 pairs <- list("LA-"=subsetCommunication(cc_res$`FALSE`),
               "LA+"=subsetCommunication(cc_res$`TRUE`))
 pairs<-lapply(names(pairs), function(x) pairs[[x]]%>%mutate(has_LA=x))%>%bind_rows()
@@ -214,22 +159,7 @@ adjmat<-adjmat%>%mutate(across(`LA+`:`LA-`,function(x) replace_na(x,0)),
 temp1<-adjmat%>%select(g1,g2,LFC)%>%pivot_wider(names_from = g2,values_from = LFC)%>%mutate(across(-1,function(x) replace_na(x,0)))%>%column_to_rownames("g1")
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Markers
+## Markers
 ```{r}
 i<-c("SERPING1","FOXO1","STAT3","CRYAB","FGF7","IDO1","MKI67","WNT4","CTNNB1")
 pG1<-DotPlot(subset(sc,cells = which(sc$harmonized_major_cell_type=="EnEpi cells")),
@@ -251,7 +181,7 @@ partA<-plot_grid(pA0,pC,pE2,pG,nrow=4,align = 'v',axis = 'lr',rel_heights = c(.3
 partB<-plot_grid(pB0,pB1,nrow=2,align = "v",axis = 'lr',rel_heights =c(.2,.8))
 partC<-plot_grid(pD,pE,pF,ncol=3,rel_widths = c(.3,.4,.3),align = 'h',axis = "tb")
 ```
-# Do proteins match with transcritps?
+## Do proteins match with transcritps?
 ```{r}
 samples<-metadata%>%filter(dom_nEndoh1_75==6&Class=="Peritoneal endometriosis")%>%
   distinct(Run_Tissue_name)%>%unlist()
@@ -316,7 +246,6 @@ temp%>%pivot_longer(`Beta-catenin`:`pan-RAS`,names_to = "probe",values_to = "avg
 ```
 
 
-# maybe
 ```{r}
 mesen<-subset(sc,cells = which(!is.na(sc$published_mesenchymal_subtype)))
 i<-mesen@meta.data%>%

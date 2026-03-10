@@ -283,7 +283,7 @@ pH<-temp%>%ggplot(aes(x=ct,y=Description,size =p.adjust,col=NES))+geom_point()+
     theme_bw()+labs(x="",y="")+
     theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
     scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
-    scale_size(range=c(8,1))
+    scale_size(range=c(5,1))
 pH1<-pH$data%>%distinct(ct)%>%ggplot(aes(x=ct,fill=ct,y=1))+geom_tile()+
   scale_fill_manual(values=alt_cellcols)+theme_void()+theme(legend.position = "n")
 i<-gsea_bp%>%filter(NES<0)%>%add_count(Description)%>%
@@ -296,25 +296,25 @@ pI<-temp%>%ggplot(aes(x=ct,y=Description,size =p.adjust,col=NES))+geom_point()+
     theme_bw()+labs(x="",y="")+
     theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
     scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
-    scale_size(range=c(8,1))
+    scale_size(range=c(5,1))
 pI1<-pI$data%>%distinct(ct)%>%ggplot(aes(x=ct,fill=ct,y=1))+geom_tile()+
   scale_fill_manual(values=alt_cellcols)+theme_void()+theme(legend.position = "n")
 
 
-partD<-plot_grid(plot_grid(pD,NULL,nrow = 2),pD2+theme(legend.position = "left"))
-partB<-plot_grid(pB0,pB1,nrow=2,rel_heights = c(.3,.7),align = "v",axis = "lr")
-partA<-plot_grid(NULL,pA0,pC,nrow=3,rel_heights = c(.2,.4,.4))
-partA<-plot_grid(plot_grid(NULL,partB,nrow=2),partA,rel_widths = c(.7,.3))
-partB<-plot_grid(plot_grid(NULL,pD0,NULL,nrow=3,rel_heights = c(.15,.7,.15)),
-                 pD2+theme(legend.position = "bottom"),align = "h",axis = "tb")
-partC<-plot_grid(pE+theme(legend.position = "left"),pE1,pFA,pHA,rel_widths = c(.4,.3,.15,.15),align = "h",axis = "tb",ncol=4)
-partB<-plot_grid(partB,partC,rel_widths = c(.3,.7))
-partC<-plot_grid(pG,pI,NULL,ncol=3,rel_widths = c(.2,.4,.3))
 
+partA<-plot_grid(NULL,pA,pC,nrow=3,rel_heights = c(.2,.4,.4))
+partB<-plot_grid(NULL,pB0,pB1+theme(axis.text.x = element_text(angle=0,vjust = 1,hjust = .5)),nrow=3,rel_heights = c(.45,.15,.4),align = "v",axis = "lr")
+partA<-plot_grid(partB,partA,rel_widths = c(.75,.25))
+partD<-plot_grid(plot_grid(pD,NULL,nrow = 2),pD2+theme(legend.position = "bottom"))
+partB<-plot_grid(pE+theme(legend.position = "left"),pE1+theme(strip.text.y.left = element_blank()),pF+theme(axis.text.y = element_blank()),pG+theme(axis.text.y = element_blank()),ncol=4,align = "h",axis = "tb",rel_widths = c(.45,.1,.23,.17))
+partC<-plot_grid(plot_grid(pH+theme(axis.text.x = element_blank()),pH1,nrow = 2,rel_heights = c(.9,.1),align = "v",axis = "lr"),plot_grid(pI+theme(axis.text.x = element_blank()),pI1,nrow=2,rel_heights = c(.9,.1),align = "v",axis = "lr"),align = "h",axis = "tb")
+pdf("temp.pdf",width = 14,height = 12)
+ plot_grid(partA,partB,partC,nrow=3,rel_heights = c(.4,.4,.2))
+dev.off()
 
 ```
 
-## Metabolism
+# Metabolism
 ```{r}
 library(scMetabolism)
 sc<-readRDS("/media/Lawrenson_Lab_NAS/caipirinha/speed/share/fixed_annotated_aux.seurat.rds")

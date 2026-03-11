@@ -23,12 +23,32 @@ names(slidecol)<-unique(metadata$Run_Tissue_name)
 classcols = c( "Eutopic endometrium" = "#c2a5cf", 
               "Peritoneal endometriosis" = "#d9f0d3")
 cellcols<-c("#8DB600","#fdae61","#a95f96","#0067A5","#604E97",
-            "#f46d43","hotpink","#BE0032","cornflowerblue")
+            "#f46d43","hotpink","#BE0032","cornflowerblue","black")
 names(cellcols)<-c("B cells","Plasma cells","CD4 T cells","CD8 T cells",
-                   "NK cells","Myeloid cells","unknown","Epithelial","Stroma")
+                   "NK cells","Myeloid cells","unknown","Epithelial","Stroma","low_signal")
 
 ```
+# Filter/QC
+```{r}
+temp<-metadata%>%group_by(Run_Tissue_name)%>%
+  summarise(thres=quantile(nCount_RNA,c(0.05)))
+metadata<-metadata%>%left_join(temp)
+metadata<-metadata%>%
+  mutate(qc_type=ifelse(nCount_RNA>thres,
+                        cl_corrected,"low_signal"))
 
+temp<-metadata%>%count(Run_Tissue_name,fov,qc_type)%>%
+  group_by(Run_Tissue_name,fov)%>%mutate(prop=100*n/sum(n))%>%
+  filter(qc_type=="low_signal")
+i<-temp%>%filter(prop>=25)%>%select(1:3)
+colnames(i)[3]<-"fov_type"
+metadata<-metadata%>%left_join(i)
+metadata<-metadata%>%
+  mutate(fov_type=ifelse(is.na(fov_type),qc_type,fov_type))%>%
+  select(-qc_type)
+
+metadata<-metadata%>%filter(!fov_type%in%c("low_signal","unknown"))
+```
 # Cell type markers
 ```{r}
 markers<-read_tsv("cosmx_markers.tsv")
@@ -36,8 +56,9 @@ markers<-markers%>%separate_rows(Positive,sep = ",")%>%
   distinct(Positive)%>%unlist()
 markers<-markers[c(2,1,5,4,8,7,9,12,10,16,18,3,19,22,23)]
 
-pe<-vroom::vroom("/media/Lawrenson_Lab_NAS/uthscsa/group_data/CosMx_temp/PE.csv")
-mat<-vroom::vroom("/media/Lawrenson_Lab_NAS/uthscsa/group_data/CosMx_temp/endometrium.csv")
+pe<-vroom::vroom("/media/Lawrenson_Lab_NAS/uthscsa/group_data/CosMx_temp/PE.csv")%>%
+  filter(cell_ID%in%metadata$cell_ID)
+mat<-vroom::vroom("/media/Lawrenson_Lab_NAS/uthscsa/group_data/CosMx_temp/endometrium.csv")%>%filter(cell_ID%in%metadata$cell_ID)
 mat<-mat%>%bind_rows(pe)%>%column_to_rownames("cell_ID")%>%t()
 negavg<-colMeans(mat[c("Ms IgG1","Rb IgG"),])
 normi<-t(t(mat)-negavg)
@@ -45,9 +66,8 @@ normi<-asinh(mat/5)
 normi<-sva::ComBat(dat = normi,batch = str_remove(colnames(normi),"c_.+"),
                      BPPARAM = BiocParallel::MulticoreParam(workers = 10))
 
-temp<-metadata%>%filter(cl_corrected!="unknown")%>%
-  select(cell_ID,cl_corrected)
-avged<-split(temp,by = "cl_corrected")%>%
+temp<-metadata%>%select(cell_ID,fov_type)
+avged<-split(temp,by = "fov_type")%>%
   sapply(function(x) rowMeans(normi[,x$cell_ID]))
 
 pC<-avged%>%t()%>%scale()%>%t()%>%as.data.frame()%>%
@@ -65,9 +85,9 @@ pC<-avged%>%t()%>%scale()%>%t()%>%as.data.frame()%>%
     theme_minimal()+
     theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))
 
-pC1<-temp%>%count(cl_corrected)%>%
-  mutate(cl_corrected=factor(cl_corrected,levels = names(cellcols)))%>%
-  ggplot(aes(x=n,y=cl_corrected))+geom_col()+theme_classic()+scale_x_log10()+        theme(axis.text.y = element_blank(),
+pC1<-temp%>%count(fov_type)%>%
+  mutate(fov_type=factor(fov_type,levels = names(cellcols)))%>%
+  ggplot(aes(x=n,y=fov_type))+geom_col()+theme_classic()+scale_x_log10()+        theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         panel.spacing = unit(.01, "lines"),
         plot.margin=grid::unit(c(0,0,0,-5),"mm"),
@@ -84,7 +104,7 @@ library(limma)
 library(speckle)
 
 temp<-metadata%>%distinct(Class,Run_Tissue_name)
-props<-getTransformedProps(metadata$cl_corrected,
+props<-getTransformedProps(metadata$fov_type,
                            metadata$Run_Tissue_name)
 props<-props$TransformedProps[,temp$Run_Tissue_name]
 designM<-model.matrix(~0+Class,data=temp)#groups around replicates=samplename
@@ -110,7 +130,9 @@ sc@meta.data<-sc@meta.data%>%
                             str_detect(harmonized_major_plus_immune_cell_type,"Th.+ T-cells")~"CD4 T cells",
                             str_detect(harmonized_major_cell_type,"EnS|Smooth|Mesen|Endot")~"Stroma",
                             TRUE~harmonized_major_cell_type))
-sc@meta.data<-sc@meta.data%>%mutate(harmonized_major_plus_immune_cell_type=str_replace(harmonized_major_plus_immune_cell_type,"Memmo","Memo"))
+sc@meta.data<-sc@meta.data%>%
+  mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
+  mutate(nosub=str_replace(nosub,"Memmo","Memo")%>%str_remove("Early "))
 
 aux_table<-sc@meta.data
 temp<-aux_table%>%distinct(Class,SampleName)
@@ -142,8 +164,8 @@ pE<-temp%>%ggplot(aes(x=RNA_LFC,y=CosMx_LFC,size=max_P))+
   labs(x="RNA LFC",y="protein LFC",size="Max. P.")+
   theme(legend.position = "bottom",panel.grid = element_blank())
 
-temp<-metadata%>%count(Class,cl_corrected,name = "CosMx_n")%>%
-  mutate(celltype=cl_corrected)%>%select(-cl_corrected)
+temp<-metadata%>%count(Class,fov_type,name = "CosMx_n")%>%
+  mutate(celltype=fov_type)%>%select(-fov_type)
 temp<-aux%>%count(Class,celltype,name = "RNA_n")%>%inner_join(temp)%>%
   pivot_longer(RNA_n:CosMx_n,names_to = "platform",values_to = "n")
 temp<-temp%>%group_by(Class,platform)%>%
@@ -160,26 +182,21 @@ plot_grid(pE,pE1,rel_widths = c(.4,.6))
 ```
 # RNA difference
 ```{r}
-alt_cellcols<-CellChat::scPalette(26)
-alt_cellcols<-grDevices::colorRampPalette(alt_cellcols)(30)
-names(alt_cellcols)<-sort(unique(aux_table$harmonized_major_plus_immune_cell_type))
+alt_cellcols<-CellChat::scPalette(length(unique(sc$nosub)))
+#alt_cellcols<-grDevices::colorRampPalette(alt_cellcols)(30)
+names(alt_cellcols)<-sort(unique(aux_table$nosub))
 alt_cellcols["B-cells"]<-cellcols["B cells"]
 alt_cellcols["Plasmablast/Plasma cells"]<-cellcols["Plasma cells"]
-alt_cellcols["Dendritic Cells (1)"]<-"#222F75"
-alt_cellcols["Effector Memory CD8 T-cells (3)"]<-"#00441B"
-alt_cellcols["Effector Memory CD8 T-cells (2)"]<-"#984EA3"
 
 weird <- scales::trans_new("signed_sqrt",
        transform=function(x) sign(x)*sqrt(abs(x)),
        inverse=function(x) sign(x)*x**2)
 pF<-aux_table%>%
-    count(harmonized_major_plus_immune_cell_type,Class)%>%
+    count(nosub,Class)%>%
     mutate(n=ifelse(Class=="Eutopic endometrium",-n,n),
-      harmonized_major_plus_immune_cell_type=
-               factor(harmonized_major_plus_immune_cell_type,
-                      levels=rev(levels(pF1$data$harmonized_major_plus_immune_cell_type))))%>%
-    ggplot(aes(y=harmonized_major_plus_immune_cell_type,x=n,
-               fill=harmonized_major_plus_immune_cell_type))+geom_col()+
+      nosub=factor(nosub,levels=rev(levels(pF1$data$nosub))))%>%
+    ggplot(aes(y=nosub,x=n,
+               fill=nosub))+geom_col()+
     scale_x_continuous(transform = weird)+
     theme_bw()+theme(legend.position = "none")+
     scale_fill_manual(values=alt_cellcols)+labs(y="",x="Cells")+
@@ -205,15 +222,16 @@ nonimmcoords%>%data.table::fwrite("RNA_nonImmune_umap.csv")
 coords<-tcoords%>%mutate(ct="T-cells")%>%
   bind_rows(nonimmcoords%>%mutate(ct="non Immune"))%>%
   bind_rows(nontcoords%>%mutate(ct="non T-cells"))
-coords<-aux_table%>%select(barcode,
-                           harmonized_major_plus_immune_cell_type,Class)%>%
+coords<-aux_table%>%select(barcode,nosub,Class)%>%
   right_join(coords)
 
+i<-temp%>%distinct(ct,nosub)%>%
+  mutate(ct=factor(ct,levels=c("non Immune","non T-cells","T-cells")))%>%
+  arrange(ct,nosub)
+alt_cellcols<-alt_cellcols[i$nosub]
 pF1<-coords%>%
-  mutate(harmonized_major_plus_immune_cell_type=
-           factor(harmonized_major_plus_immune_cell_type,
-                               levels=names(alt_cellcols)))%>%
-  ggplot(aes(x=umap_1,y=umap_2,col=harmonized_major_plus_immune_cell_type))+
+  mutate(nosub=factor(nosub,levels=names(alt_cellcols)))%>%
+  ggplot(aes(x=umap_1,y=umap_2,col=nosub))+
   geom_point(size=.1)+scale_color_manual(values=alt_cellcols)+
   guides(col=guide_legend(override.aes = list(size=5),ncol=1))+
   facet_grid(cols=vars(Class),rows=vars(ct),switch="y")+theme_void()+

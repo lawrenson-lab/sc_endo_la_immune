@@ -12,12 +12,12 @@ library(speckle)
 library(limma)
 library(ggridges)
 
-domcol <- c( "gray13", "gold2", "plum4", "darkorange1", "lightskyblue2", "maroon", "burlywood3")
-names(domcol)<-1:7
+domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")
+names(domcol)<-6:1
 classcols = c("Eutopic endometrium" = "#c2a5cf", 
               "Peritoneal endometriosis" = "#d9f0d3")
 cellcols<-c("#8DB600","#fdae61","#a95f96","#0067A5","#604E97",
-            "#f46d43","black","#BE0032","cornflowerblue")
+            "#f46d43","hotpink","#BE0032","cornflowerblue","black")
 names(cellcols)<-c("B cells","Plasma cells","CD4 T cells","CD8 T cells",
                    "NK cells","Myeloid cells","unknown","Epithelial","Stroma")
 dominantcols<-c(Epithelial="#BE0032",Stroma="cornflowerblue",Immune="forestgreen")
@@ -29,7 +29,7 @@ metadata<-lapply(files,data.table::fread)%>%bind_rows()
 i<-metadata%>%distinct(Run_Tissue_name,dom_nEndoh1_75)%>%
   count(dom_nEndoh1_75)%>%filter(n==1)%>%
   select(dom_nEndoh1_75)%>%unlist()
-metadata<-metadata%>%filter(dom_nEndoh1_75!=i)
+metadata<-metadata%>%filter(dom_nEndoh1_75!=i&!fov_type%in%c("unknown","low_signal"))
 #metadata<-metadata%>%mutate(cl_corrected=ifelse(cl_corrected=="",cl_type,cl_corrected))
 ```
 
@@ -84,33 +84,36 @@ dev.off()
 # Composition heatmap
 ```{r}
 compo<-metadata%>%
-  count(dom_nEndoh1_75,cl_corrected)%>%
+  count(dom_nEndoh1_75,fov_type)%>%
   group_by(dom_nEndoh1_75)%>%
   mutate(total=sum(n),prop=100*n/total)
 compo<-compo%>%
-  mutate(dominant=ifelse(str_detect(cl_corrected,"B|CD|Myel|Plas|NK"),"Immune",
-                cl_corrected))%>%
+  mutate(dominant=ifelse(str_detect(fov_type,"B|CD|Myel|Plas|NK"),"Immune",
+                fov_type))%>%
   group_by(dom_nEndoh1_75,dominant)%>%summarise(prop=sum(prop))%>%
   group_by(dom_nEndoh1_75)%>%slice_max(prop)%>%
   select(-prop)%>%right_join(compo)
 compo<-compo%>%distinct(dom_nEndoh1_75,total)%>%
-  arrange(desc(total))%>%rownames_to_column("index")%>%
+  arrange(total)%>%rownames_to_column("index")%>%
   select(-total)%>%right_join(compo)
 
-pA<-compo%>%filter(cl_corrected!="unknown")%>%
-    ggplot(aes(x=cl_corrected,y=as.factor(index),fill=prop))+
+pA<-compo%>%mutate(index=factor(index,levels = 6:1))%>%
+  ggplot(aes(x=fov_type,y=as.factor(index),fill=prop))+
     geom_tile()+scale_fill_viridis_c(option = "F",direction = -1,trans="sqrt")+
     theme_minimal()+labs(x="Cell type",y="Domain",fill="%")+
     theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))
-pA1<-compo%>%ggplot(aes(x=1,y=index,fill=as.factor(index)))+
+pA1<-compo%>%mutate(index=factor(index,levels = 6:1))%>%
+  ggplot(aes(x=1,y=index,fill=as.factor(index)))+
     geom_bar(stat="identity",position = "fill")+
     scale_fill_manual(values = domcol)+theme_void()+
     theme(legend.position = "n")
-pA2<-compo%>%ggplot(aes(x=1,y=index,fill=dominant))+
+pA2<-compo%>%mutate(index=factor(index,levels = 6:1))%>%
+  ggplot(aes(x=1,y=index,fill=dominant))+
   geom_bar(stat="identity",position = "fill")+
   scale_fill_manual(values = dominantcols)+theme_void()+
     theme(legend.position = "bottom",legend.direction = "vertical")
-pA3<-compo%>%distinct(index,total)%>%
+pA3<-compo%>%mutate(index=factor(index,levels = 6:1))%>%
+  distinct(index,total)%>%
   ggplot(aes(x=total,y=index))+geom_col()+
   theme_classic()+scale_x_sqrt()+
   theme(axis.ticks.y = element_blank(),axis.text.y = element_blank(),
@@ -118,9 +121,12 @@ pA3<-compo%>%distinct(index,total)%>%
         axis.text.x = element_text(angle=45,vjust=1,hjust=1))+
   labs(y="")
 
-compo<-metadata%>%count(dom_nEndoh1_75,Class,name = "class_n")%>%right_join(compo)
-compo<-compo%>%distinct(index,dom_nEndoh1_75,Class,class_n)%>%group_by(Class)%>%summarise(class_n=sum(class_n),index="Total")%>%bind_rows(compo)
-pA4<-compo%>%#mutate(dom=factor(dom,levels=c(6:1,"Total")))%>%
+compo<-metadata%>%count(dom_nEndoh1_75,Class,name = "class_n")%>%
+  right_join(compo)
+compo<-compo%>%distinct(index,dom_nEndoh1_75,Class,class_n)%>%
+  group_by(Class)%>%summarise(class_n=sum(class_n),index="Total")%>%
+  bind_rows(compo)
+pA4<-compo%>%mutate(index=factor(index,levels = 6:1))%>%
     ggplot(aes(x=class_n,y=index,fill=Class))+
     geom_bar(stat = "identity",position = "fill")+
     theme_classic()+labs(x="Cells",y="")+
@@ -135,8 +141,9 @@ pA4<-compo%>%#mutate(dom=factor(dom,levels=c(6:1,"Total")))%>%
 
 # Domain signature 
 ```{r}
-mat<-data.table::fread("PE.csv")
-mat<-data.table::fread("endometrium.csv")%>%bind_rows(mat)
+mat<-vroom::vroom("PE.csv")%>%filter(cell_ID%in%metadata$cell_ID)
+mat<-vroom::vroom("endometrium.csv")%>%
+  filter(cell_ID%in%metadata$cell_ID)%>%bind_rows(mat)
 
 metadata<-metadata%>%mutate(gr=paste0(Run_Tissue_name,":",dom_nEndoh1_75))
 temp<-metadata%>%split(f = metadata$gr)%>%
@@ -150,12 +157,14 @@ bulk<-ScaleData(bulk)
 bulk<-RunPCA(bulk)
 bulk<-harmony::RunHarmony(bulk,group.by.vars="Run_Tissue_name")
 bulk<-RunUMAP(bulk,dims = 1:10,reduction = "harmony",reduction.name = "harmonized_umap")
-domDEG<-FindAllMarkers(object = bulk,group.by = "dom_nEndoh1_75",test.use = "LR")
+domDEG<-FindAllMarkers(object = bulk,group.by = "dom_nEndoh1_75",test.use = "LR",
+                       logfc.threshold = 0,return.thresh = 1)
 
 domDEG<-pA$data%>%distinct(index,dom_nEndoh1_75)%>%
   mutate(dom_nEndoh1_75=as.character(dom_nEndoh1_75))%>%
   inner_join(domDEG,by = c("dom_nEndoh1_75"="cluster"))
-i<-domDEG%>%filter(str_detect(gene,"Chann|IgG",negate = T)&p_val_adj<0.05)%>%group_by(index)%>%slice_max(avg_log2FC,n=3)
+i<-domDEG%>%filter(str_detect(gene,"Chann|IgG",negate = T)&p_val_adj<0.05)%>%
+  group_by(index)%>%slice_max(avg_log2FC,n=3)
 pB<-domDEG%>%filter(gene%in%i$gene)%>%
   mutate(gene=factor(gene,levels = i$gene))%>%
   ggplot(aes(y=index,x=gene,col=avg_log2FC,size=p_val_adj))+
@@ -179,38 +188,38 @@ dombars<-lapply(names(classcols),function(x)
       ggtitle(x))
 names(dombars)<-names(classcols)
 cellbars<-lapply(names(classcols),function(x)
-    metadata%>%filter(Class==x&cl_corrected!="unknown")%>%count(Class,cl_corrected)%>%
-        ggplot(aes(y=Class,x=n,fill=cl_corrected))+
+    metadata%>%filter(Class==x)%>%count(Class,fov_type)%>%
+        ggplot(aes(y=Class,x=n,fill=fov_type))+
         geom_bar(stat="identity",position="fill")+
         theme_void()+scale_fill_manual(values=cellcols)+
       labs(x="%",y="",fill="domain")+theme(legend.position="none"))
 names(cellbars)<-names(classcols)
 
-temp<-metadata%>%count(Class,dom_nEndoh1_75,cl_corrected)
+temp<-metadata%>%count(Class,dom_nEndoh1_75,fov_type)
 temp<-pA$data%>%distinct(index,dom_nEndoh1_75)%>%inner_join(temp)
-pD<-temp%>%filter(cl_corrected!="unknown")%>%
-  mutate(Class=factor(Class,levels=c("Eutopic endometrium","Peritoneal endometriosis")),
-         index=factor(index,levels=6:1))%>%
-  ggplot(aes(y=Class,x=n,fill =cl_corrected))+geom_bar(stat="identity",position="fill")+
-  facet_wrap(~index,ncol=3)+scale_fill_manual(values=cellcols)+
-  theme_classic()+theme(strip.background = element_blank(),
-                        strip.text.y = element_text(angle=0),
-                        legend.position = "left")+
-  labs(x="Proportion",fill="Cell type")
+pD<-temp%>%
+    mutate(Class=factor(Class,levels=c("Peritoneal endometriosis",
+                                       "Eutopic endometrium")),
+           index=factor(index,levels=1:6))%>%
+    ggplot(aes(y=Class,x=n,fill =fov_type))+geom_bar(stat="identity",position="fill")+
+    facet_wrap(~index,ncol=3)+scale_fill_manual(values=cellcols)+
+    theme_classic()+theme(strip.background = element_blank(),
+                          strip.text.y = element_text(angle=0),
+                          legend.position = "left")+
+    labs(x="Proportion",fill="Cell type")
 
 partD<-plot_grid(dombars$`Eutopic endometrium`,cellbars$`Eutopic endometrium`,
           dombars$`Peritoneal endometriosis`,cellbars$`Peritoneal endometriosis`,nrow=2,ncol=2,align="vh",axis = "lr")
 
-pD1<-temp%>%filter(cl_corrected!="unknown")%>%
-  group_by(index,cl_corrected)%>%summarise(n=sum(n))%>%
-  ggplot(aes(x=n,y=index,fill=cl_corrected))+
+pD1<-temp%>%group_by(index,fov_type)%>%summarise(n=sum(n))%>%
+  ggplot(aes(x=n,y=index,fill=fov_type))+
   geom_bar(stat="identity",position="fill")+
   scale_fill_manual(values=cellcols)+
   theme_void()+theme(legend.position = "n")
 #test
 temp<-split(metadata,f = metadata$dom_nEndoh1_75)
 props<-lapply(temp,function(x) 
-  getTransformedProps(x$cl_corrected,
+  getTransformedProps(x$fov_type,
                       x$Run_Tissue_name))
 temp<-lapply(temp,function(x)
   x%>%distinct(Class,Run_Tissue_name)%>%
@@ -241,20 +250,20 @@ edges<-lapply(names(edges), function(x)
   edges[[x]]%>%mutate(Run_Tissue_name=x))%>%bind_rows()
 edges<-edges%>%filter(distance<=0.1)
 edges<-edges%>%mutate(from=paste0(Run_Tissue_name,from),to=paste0(Run_Tissue_name,to))
-edges<-meta%>%
-    select(cell_ID,merged_corrected,dom_nEndoh1_75)%>%
+edges<-metadata%>%
+    select(cell_ID,fov_type,dom_nEndoh1_75)%>%
     right_join(edges,by = c("cell_ID"="from"))
 colnames(edges)[1:3]<-c("from","type_from","dom_from")
-edges<-meta%>%
-    select(cell_ID,merged_corrected,dom_nEndoh1_75)%>%
+edges<-metadata%>%
+    select(cell_ID,fov_type,dom_nEndoh1_75)%>%
     right_join(edges,by = c("cell_ID"="to"))
 colnames(edges)[1:3]<-c("to","type_to","dom_to")
-edges<-meta%>%distinct(Run_Tissue_name,Class)%>%right_join(edges)
+edges<-metadata%>%distinct(Run_Tissue_name,Class)%>%right_join(edges)
 edges<-edges%>%mutate(homodom=dom_to==dom_from,
                       homotypic=type_from==type_to)
 
-edges1<-edges%>%filter(homodom==TRUE)
-temp<-edges1%>%count(dom_to,type_from,type_to,homotypic)%>%
+edges<-edges%>%filter(homodom==TRUE)
+temp<-edges%>%count(dom_to,type_from,type_to,homotypic)%>%
   filter(!(type_from=="unknown"|type_to=="unknown"))
 temp$edge_type<-apply(temp,1,function(x) paste0(sort(x[2:3]),collapse = " - "))
 temp<-temp%>%mutate(name_from=str_remove(edge_type," -.+"),name_to=str_remove(edge_type,".+- "))
@@ -278,16 +287,16 @@ pF<-temp%>%group_by(edge_type)%>%slice_max(prop)%>%
   labs(x="from",y="to")
 
 temp<-temp%>%group_by(index)%>%mutate(total=sum(n),prop=100*n/total)
-pF1<-temp%>%ggplot(aes(y=prop,x=index,col=as.factor(index)))+
-  geom_violin()+geom_boxplot(width=.1)+
-  geom_text_repel(data=temp%>%filter(prop>10),
-                  aes(label=edge_type))+
-  labs(x="domain",y="interaction partners")+scale_y_sqrt()+
-  scale_color_manual(values=domcol)+theme_classic()+
-  theme(legend.position = "n")
+pF1<-temp%>%ggplot(aes(x=prop,y=index,col=as.factor(index)))+
+    geom_violin()+geom_boxplot(width=.1)+
+    geom_text_repel(data=temp%>%filter(prop>10),
+                    aes(label=edge_type))+
+    labs(y="domain",x="interaction partners")+scale_x_sqrt()+
+    scale_color_manual(values=domcol)+theme_classic()+
+    theme(legend.position = "n")
 
 #density
-temp<-edges1%>%group_by(dom_to,Run_Tissue_name,type_to,type_from)%>%
+temp<-edges%>%group_by(dom_to,Run_Tissue_name,type_to,type_from)%>%
   summarise(avg_dist=mean(distance))
 temp<-pA$data%>%distinct(index,dom_nEndoh1_75)%>%
   right_join(temp,by=c("dom_nEndoh1_75"="dom_to"))

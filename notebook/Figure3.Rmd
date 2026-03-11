@@ -10,10 +10,10 @@ library(cowplot)
 library(ComplexHeatmap)
 library(circlize)
 
-domcol <- c( "gray13", "gold2", "plum4", "darkorange1", "lightskyblue2", "firebrick", "burlywood3")
-names(domcol)<-1:7
+domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")
+names(domcol)<-6:1
 cellcols<-c("#8DB600","#fdae61","#a95f96","#0067A5","#604E97",
-            "#f46d43","black","#BE0032","cornflowerblue")
+            "#f46d43","hotpink","#BE0032","cornflowerblue","black")
 names(cellcols)<-c("B cells","Plasma cells","CD4 T cells","CD8 T cells",
                    "NK cells","Myeloid cells","unknown","Epithelial","Stroma")
 classcols = c( "Endometrium" = "#c2a5cf", 
@@ -27,8 +27,7 @@ metadata<-lapply(files,data.table::fread)%>%bind_rows()
 i<-metadata%>%distinct(Run_Tissue_name,dom_nEndoh1_75)%>%
   count(dom_nEndoh1_75)%>%filter(n==1)%>%
   select(dom_nEndoh1_75)%>%unlist()
-metadata<-metadata%>%filter(dom_nEndoh1_75!=i)
-#metadata<-metadata%>%mutate(cl_corrected=ifelse(cl_corrected=="",cl_type,cl_corrected))
+metadata<-metadata%>%filter(dom_nEndoh1_75!=i&!fov_type%in%c("unknown","low_signal"))
 ```
 
 ## blob size
@@ -49,7 +48,7 @@ dbcl <- lapply(names(dom6),function(x)
 names(dbcl)<-names(dom6)
 blobs<-lapply(names(dom6), function(x)
   dom6[[x]]%>%select(Run_Tissue_name,cell_ID,x_slide_mm,y_slide_mm,
-                     Class,Area.um2,cl_corrected,dom_nEndoh1_75)%>%
+                     Class,Area.um2,fov_type,dom_nEndoh1_75)%>%
     mutate(dbcl=dbcl[[x]]$cluster))%>%bind_rows()
 #blobs%>%ggplot(aes(x=x_slide_mm,y=y_slide_mm,col=as.factor(dbcl)))+
 #  geom_point(size=1)+
@@ -67,30 +66,29 @@ pA0<-blobs%>%count(Class,Run_Tissue_name,dbcl,name="Size")%>%
 
 ## blob composition
 ```{r}
-temp<-blobs%>%filter(str_detect(cl_corrected,"B|CD|Mye|Plas|NK"))%>%
-  count(Class,Run_Tissue_name,dbcl,cl_corrected,name="cells")%>%
+temp<-blobs%>%filter(str_detect(fov_type,"B|CD|Mye|Plas|NK"))%>%
+  count(Class,Run_Tissue_name,dbcl,fov_type,name="cells")%>%
   group_by(Class,Run_Tissue_name,dbcl)%>%
   mutate(total=sum(cells),prop=100*cells/total)%>%
   ungroup()
 
-pB0<-temp%>%count(Class,cl_corrected)%>%
+pB0<-temp%>%count(Class,fov_type)%>%
   left_join(temp%>%distinct(Class,Run_Tissue_name,dbcl)%>%
               count(Class,name = "total"))%>%mutate(prop=100*n/total)%>%
-  ggplot(aes(x=Class,y=prop,fill=cl_corrected))+geom_col()+facet_grid(~cl_corrected)+
+  ggplot(aes(x=Class,y=prop,fill=fov_type))+geom_col()+facet_grid(~fov_type)+
     theme_classic()+theme(axis.text.x = element_blank(),
                                 strip.background = element_blank(),
                                 plot.margin=grid::unit(c(0,0,-4,0), "mm"))+
     labs(x="",y="% of instances")+
   scale_fill_manual(values=cellcols)+theme(legend.position = "none")
 
-pB1<-temp%>%ggplot(aes(x=Class,y=prop,col=cl_corrected,group=Class))+
+pB1<-temp%>%ggplot(aes(x=Class,y=prop,col=fov_type,group=Class))+
     geom_violin()+
     geom_jitter(aes(size=total),width = .1,alpha=0.5)+
   scale_color_manual(values=cellcols)+
     stat_compare_means(method = "wilcox.test",label="p.signif",
-                       hide.ns = T,label.x.npc = .5,size=6,
-                       position = position_nudge(y = -3))+
-  facet_grid(~cl_corrected)+theme_classic()+
+                       hide.ns = T,comparisons = list(c("Endometrium","Endometriosis")))+
+  facet_grid(~fov_type)+theme_classic()+
   theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
         strip.background = element_blank(),strip.text.x = element_blank())+
     labs(x="",y="% per instance",size="Size")+
@@ -100,7 +98,7 @@ pB1<-temp%>%ggplot(aes(x=Class,y=prop,col=cl_corrected,group=Class))+
 
 temp<-temp%>%ungroup()%>%mutate(box=cut(total,breaks = 10))
 formula <- y ~ x    
-pC<-ggplot(temp, aes(x= total, y= prop, group=cl_corrected,color = cl_corrected)) +
+pC<-ggplot(temp, aes(x= total, y= prop, group=fov_type,color = fov_type)) +
     geom_smooth(method = "loess", formula = formula, se = F,)+
   scale_color_manual(values=cellcols)+labs(x="Size",y='%',colour="Cell type")+
   scale_y_continuous(limit=c(0,NA))+theme_classic()+
@@ -123,29 +121,23 @@ sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"&
 gc()
 sc$has_LA<-ifelse(sc$LA_per_Sample>0,"LA+","LA-")
 sc@meta.data<-sc@meta.data%>%
-  mutate(Final_Immune_Cluster_ID=str_replace(Final_Immune_Cluster_ID,"Memmory","Memory")%>%
-#           str_replace("Gamma-Delta","γδ")%>%
-           str_replace("Cells","cells"))
+  mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
+  mutate(nosub=str_replace(nosub,"Memmo","Memo")%>%str_remove("Early "))
 aux_table<-sc@meta.data
 ```
 ## UMAP 
 ```{r}
-alt_cellcols<-CellChat::scPalette(26)
-alt_cellcols<-grDevices::colorRampPalette(alt_cellcols)(30)
-names(alt_cellcols)<-sort(unique(aux_table$harmonized_major_plus_immune_cell_type))
-names(alt_cellcols)<-str_replace(names(alt_cellcols),"-"," ")%>%str_remove("Plasmablast/")
-cellcols<-cellcols[sort(names(cellcols))]
-alt_cellcols[names(alt_cellcols)%in%names(cellcols)]<-cellcols[names(cellcols)%in%names(alt_cellcols)]
-names(alt_cellcols)<-sort(unique(aux_table$harmonized_major_plus_immune_cell_type))
-alt_cellcols<-alt_cellcols[names(alt_cellcols)%in%unique(sc$harmonized_major_plus_immune_cell_type)]
 
-sc<-RunUMAP(sc,dims = 1:10)
+imm<-subset(sc,cells=which(str_detect(sc$nosub,"T-|Macro|B-|Dend|NK|Mas|Plas")))
+imm<-FindVariableFeatures(imm)
+imm<-RunPCA(temp)
+imm<-RunUMAP(imm,dims = 1:10,repulsion.strength = 5)
 coords<-sc@reductions$umap@cell.embeddings%>%
   as.data.frame()%>%rownames_to_column("barcode")
 coords<-sc@meta.data%>%rownames_to_column("barcode")%>%
   select(barcode,has_LA,SampleName,
-         harmonized_major_plus_immune_cell_type)%>%inner_join(coords)
-pD<-coords%>%ggplot(aes(x=umap_1,y=umap_2,col=harmonized_major_plus_immune_cell_type))+
+         nosub)%>%inner_join(coords)
+pD<-coords%>%ggplot(aes(x=umap_1,y=umap_2,col=nosub))+
   geom_point(size=0.1)+
   scale_color_manual(values=alt_cellcols)+
   guides(colour = guide_legend(override.aes = list(size = 3),ncol = 1))+
@@ -161,9 +153,10 @@ pD2<-coords%>%ggplot(aes(x=umap_1,y=umap_2))+
 
 ## Speckle
 ```{r}
-props<-getTransformedProps(coords$harmonized_major_plus_immune_cell_type,
-                           coords$SampleName)
-temp<-coords%>%distinct(has_LA,SampleName)
+aux_table<-aux_table%>%filter(str_detect(nosub,"B|T-|NK|Macr|Plas|Dend|Mas"))
+props<-getTransformedProps(aux_table$nosub,
+                           aux_table$SampleName)
+temp<-aux_table%>%distinct(has_LA,SampleName)
 designM<-model.matrix(~0+has_LA,data=temp)#groups around 
 colnames(designM)<-c("LAn","LAy")
 
@@ -195,15 +188,15 @@ weird <- scales::trans_new("signed_log10",
        transform=function(x) sign(x)*log10(abs(x)),
        inverse=function(x) sign(x)*10**log10(abs(x)))
 
-temp<-coords%>%count(has_LA,harmonized_major_plus_immune_cell_type)%>%
-  group_by_(harmonized_major_plus_immune_cell_type)%>%
-  mutate(harmonized_major_plus_immune_cell_type=factor(harmonized_major_plus_immune_cell_type,levels = (pE$data$cell_type)),
+temp<-aux_table%>%count(has_LA,nosub)%>%
+  group_by(nosub)%>%
+  mutate(nosub=factor(nosub,levels = (pE$data$cell_type)),
          total=sum(n),
          prop=n/total)
-pE1<-temp%>%mutate(harmonized_major_plus_immune_cell_type=factor(harmonized_major_plus_immune_cell_type,levels=rev(pE$data$cell_type)))%>%
-  ggplot(aes(x=n,y=has_LA,fill=harmonized_major_plus_immune_cell_type))+
+pE1<-temp%>%mutate(nosub=factor(nosub,levels=rev(pE$data$cell_type)))%>%
+  ggplot(aes(x=n,y=has_LA,fill=nosub))+
   geom_col()+scale_fill_manual(values=alt_cellcols)+
-  facet_grid(rows=vars(harmonized_major_plus_immune_cell_type),
+  facet_grid(rows=vars(nosub),
              scales="free",space="free",switch='y')+theme_classic()+
   theme(legend.position = "n",strip.background =element_blank(),
         strip.text.y.left = element_text(angle=0,vjust = .5,hjust = 1),
@@ -212,27 +205,27 @@ pE1<-temp%>%mutate(harmonized_major_plus_immune_cell_type=factor(harmonized_majo
         plot.margin=grid::unit(c(0,3,0,-6), "mm"))+scale_x_log10()+
   labs(y="",x="Cells")
 ```
-# Differential expression
-## pseudobulk per sample
+## Differential expression
 ```{r}
 bulk<-AggregateExpression(
   sc,
   assays = "RNA",
   return.seurat = T,
-  group.by = c("SampleName","harmonized_major_plus_immune_cell_type","has_LA"))
+  group.by = c("SampleName","nosub","has_LA"))
 
-i<-bulk@meta.data%>%count(harmonized_major_plus_immune_cell_type)%>%
-  filter(n>10)%>%distinct(harmonized_major_plus_immune_cell_type)%>%
-  unlist()
-bulk<-lapply(i, function(x) 
-  subset(bulk,subset =harmonized_major_plus_immune_cell_type==x ))
-names(bulk)<-i
+#i<-bulk@meta.data%>%count(nosub)%>%
+#  filter(n>10)%>%distinct(nosub)%>%
+#  unlist()
+#all subsets include >100 cells from >10 samples
+bulk<-lapply(unique(sc$nosub), function(x) 
+  subset(bulk,subset =nosub==x ))
+names(bulk)<-unique(sc$nosub)
 deg<-lapply(bulk,function(x) 
   FindMarkers(x,group.by="has_LA",ident.1="LA+",
               ident.2="LA-",test.use="MAST",logfc.threshold=0))
 deg<-lapply(names(deg),function(x) 
   deg[[x]]%>%rownames_to_column("gene")%>%mutate(ct=x))%>%bind_rows()
-#write_csv(deg,"docs/has_laDEG-bulk-MAST.tsv")
+#write_csv(deg,"docs/has_laDEG-nosub_bulk-MAST.tsv")
 
 ranks<-split(deg,f = deg$ct)%>%lapply(function(x) 
   x%>%add_count(gene)%>%filter(n==1)%>%arrange(desc(avg_log2FC))%>%
@@ -246,10 +239,11 @@ gsea_bp<-lapply(gsea_bp,simplify)
 
 gsea_bp<-lapply(names(gsea_bp),function(x)
   gsea_bp[[x]]%>%as.data.frame()%>%mutate(ct=x))%>%bind_rows()
-gsea_bp%>%write_csv("docs/has_laDEG-bulk-GSEA-BPsimpl.csv")
+#gsea_bp%>%write_csv("docs/has_laDEG-nosubbulk-GSEA-BPsimpl.csv")
 
 
-temp<-deg%>%arrange(avg_log2FC)%>%group_by(ct)%>%mutate(index=1:n(),
+temp<-deg%>%filter(ct%in%pE$data$cell_type)%>%
+  arrange(avg_log2FC)%>%group_by(ct)%>%mutate(index=1:n(),
            ct=factor(ct,levels=rev(pE$data$cell_type)))
 temp<-temp%>%ungroup()%>%complete(ct,fill = list(avg_log2FC=0))
 pF<-temp%>%ggplot(aes(x=index,y=ct,fill=avg_log2FC))+geom_raster()+
@@ -260,9 +254,11 @@ pF<-temp%>%ggplot(aes(x=index,y=ct,fill=avg_log2FC))+geom_raster()+
                         axis.text.x = element_blank(),
                         axis.ticks.x = element_blank(),
                         panel.spacing = unit(.02, "lines"),
-                        panel.grid.major.y = element_blank())
+                        panel.grid.major.y = element_blank())+
+  labs(x="Genes",y="cell types",fill="LFC")
 
-temp<-gsea_bp%>%mutate(STATUS=ifelse(NES>0,"LA+","LA-"),
+temp<-gsea_bp%>%filter(ct%in%pE$data$cell_type)%>%
+  mutate(STATUS=ifelse(NES>0,"LA+","LA-"),
                      ct=factor(ct,levels = pE$data$cell_type))%>%
     count(ct,STATUS)
 temp<-temp%>%complete(ct,STATUS)
@@ -275,7 +271,7 @@ pG<-temp%>%ggplot(aes(x=STATUS,y=ct,fill=n))+
 
 i<-gsea_bp%>%filter(NES>0)%>%add_count(Description)%>%
   filter(n>4)%>%distinct(Description)%>%unlist()
-temp<-gsea_bp%>%filter(Description%in%i)%>%
+temp<-gsea_bp%>%filter(Description%in%i&ct%in%pE$data$cell_type)%>%
   add_count(Description)%>%arrange(n,Description)%>%
   mutate(Description=factor(Description,levels=rev(unique(Description))),
          ct=factor(ct,levels = unique(ct)))
@@ -288,7 +284,7 @@ pH1<-pH$data%>%distinct(ct)%>%ggplot(aes(x=ct,fill=ct,y=1))+geom_tile()+
   scale_fill_manual(values=alt_cellcols)+theme_void()+theme(legend.position = "n")
 i<-gsea_bp%>%filter(NES<0)%>%add_count(Description)%>%
     filter(n>4)%>%distinct(Description)%>%unlist()
-temp<-gsea_bp%>%filter(Description%in%i)%>%
+temp<-gsea_bp%>%filter(Description%in%i&ct%in%pE$data$cell_type)%>%
   add_count(Description)%>%arrange(n,Description)%>%
   mutate(Description=factor(Description,levels=rev(unique(Description))),
          ct=factor(ct,levels = unique(ct)))

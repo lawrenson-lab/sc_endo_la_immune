@@ -30,7 +30,6 @@ i<-metadata%>%distinct(Run_Tissue_name,dom_nEndoh1_75)%>%
   count(dom_nEndoh1_75)%>%filter(n==1)%>%
   select(dom_nEndoh1_75)%>%unlist()
 metadata<-metadata%>%filter(dom_nEndoh1_75!=i&!fov_type%in%c("unknown","low_signal"))
-#metadata<-metadata%>%mutate(cl_corrected=ifelse(cl_corrected=="",cl_type,cl_corrected))
 ```
 
 # Supplementary heatmap

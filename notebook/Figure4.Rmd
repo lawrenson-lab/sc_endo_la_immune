@@ -7,17 +7,20 @@ library(Seurat)
 library(CellChat)
 library(ggrepel)
 library(ggpubr)
+library(rstatix)
 #library(limma)
 library(introdataviz)
 library(ggtext)
-
+library(ComplexHeatmap)
 
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"&
                            !sc$harmonized_major_plus_immune_cell_type%in%c("Erythrocytes","Exclude")))
 sc@meta.data<-sc@meta.data%>%mutate(has_LA=ifelse(LA_per_Sample>0,"LA+","LA-"))
-Idents(sc)<-sc$has_LA
-aux_table<-sc@meta.data
+sc@meta.data<-sc@meta.data%>%
+  mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
+  mutate(nosub=str_replace(nosub,"Memmo","Memo")%>%str_remove("Early "))
+aux_table<-sc@meta.data%>%rownames_to_column("barcode")
 
 cellcols<-c("#8DB600","#fdae61","#a95f96","#0067A5","#604E97",
             "#f46d43","black","#BE0032","cornflowerblue")
@@ -27,14 +30,14 @@ lacols<-c("LA+"="#8DB600","LA-"="#f46d43",none="black")
 ```
 # Dotplot of relevant genes
 ```{r}
-gsea_bp<-read_csv("docs/has_laDEG-imm100_GSEABP_simplify.csv")
-deg<-read_csv("docs/has_laDEG-bulk-MAST.tsv")
+deg<-read_csv("docs/has_laDEG-nosub_bulk-MAST.tsv")
+gsea_bp<-read_csv("docs/has_laDEG-nosubbulk-GSEA-BPsimpl.csv")
 
 i<-gsea_bp%>%filter(NES>0)%>%add_count(Description)%>%
   filter(n>4)%>%distinct(Description)%>%unlist()
 i<-gsea_bp%>%filter(Description%in%i)%>%
   separate_rows(core_enrichment,sep = "/")%>%
-  distinct(core_enrichment,celltype)%>%
+  distinct(core_enrichment,ct)%>%
   add_count(core_enrichment)%>%filter(n>1)%>%
   distinct(core_enrichment)%>%unlist()
 i<-deg%>%filter(gene%in%i)%>%group_by(gene)%>%
@@ -53,51 +56,42 @@ pA<-deg%>%filter(gene%in%i)%>%
 # Progeny
 ```{r}
 progeny<-data.table::fread("data/progeney_scores.tsv")
-progeny<-aux_table%>%select(barcode,has_LA,harmonized_major_plus_immune_cell_type,SampleName)%>%inner_join(progeny)
+progeny<-aux_table%>%select(barcode,has_LA,nosub,SampleName)%>%
+  inner_join(progeny,by=c("barcode"="Cell"))
 
-temp<-progeny%>%
-  group_by(SampleName,has_LA,harmonized_major_plus_immune_cell_type)%>%
-  summarise(across(Androgen:WNT,sum))%>%ungroup()%>%
-  mutate(across(Androgen:WNT,function(x) sign(x)*log10(abs(x))))
-temp<-temp%>%pivot_longer(Androgen:WNT)
-temp1<-temp%>%group_by(harmonized_major_plus_immune_cell_type,name)%>%
-  wilcox_test(value~has_LA)
+temp<-progeny%>%filter(str_detect(nosub,"En|Mes|Smoo",negate = T))%>%
+  select(SampleName,has_LA,nosub,`JAK-STAT`,NFkB,TGFb,TNFa)%>%
+  pivot_longer(`JAK-STAT`:TNFa)
+temp1<-temp%>%group_by(SampleName,has_LA,nosub,name)%>%
+  summarise(avg_activity=mean(value))%>%
+  group_by(nosub,name)%>%
+  wilcox_test(avg_activity~has_LA)
 #temp1$padj<-p.adjust(temp1$p,"fdr")#nothing is significant
-temp<-temp%>%group_by(name,has_LA,harmonized_major_plus_immune_cell_type)%>%
-  summarise(value=mean(value))
-temp<-temp%>%filter(value>0)%>%ungroup()%>%
-  distinct(name,harmonized_major_plus_immune_cell_type)%>%
-  inner_join(temp1)%>%filter(p<0.05)
-temp<-temp1%>%filter(name%in%c("TGFb","p53","WNT")&p<0.05)%>%
-  bind_rows(temp)%>%distinct(harmonized_major_plus_immune_cell_type,name)
 
-temp<-progeny%>%pivot_longer(Androgen:WNT)%>%inner_join(temp)
-
-pB<-temp%>%ggplot(aes(x=harmonized_major_plus_immune_cell_type,fill=has_LA,y=value))+
-    geom_split_violin()+facet_grid(~name,scales="free_x",space = "free")+theme_bw()+
-    scale_fill_manual(values=lacols)+geom_hline(yintercept = 0)+
-    theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
-          legend.position = "bottom",strip.background = element_blank(),
-          panel.grid = element_blank())+labs(x="",y="activity")
+pB<-temp%>%mutate(has_LA=factor(has_LA,levels = c("LA+","LA-")))%>%
+  ggplot(aes(x=value,col=has_LA,y=nosub))+
+    ggridges::geom_density_ridges(fill="white",alpha=.1)+
+  facet_grid(~name,scales="free_x")+theme_bw()+
+  scale_colour_manual(values=lacols)+geom_vline(xintercept = 0)+
+  theme(strip.background = element_blank(),panel.grid = element_blank())
 
 plot_grid(pA,pB,rel_widths = c(.4,.6))
 ```
 
 # Cell chat
 ```{r}
-cc_res<-readRDS("data/CellChat_PE_hasLA_exclude.rds")
+cc_res<-readRDS("data/CellChat_nosubPE_hasLA.rds")
 temp<-rankNet(cc_res[[1]], mode = "comparison", measure = "count", 
               sources.use = NULL, targets.use = NULL, stacked = T,
               do.stat = TRUE,return.data = T)
 temp<-temp$signaling.contribution%>%as.data.frame()
-temp<-cc_res[[1]]@LR$`FALSE`$LRsig%>%
+temp<-cc_res[[1]]@LR$LApos$LRsig%>%
   distinct(pathway_name,annotation)%>%
   inner_join(temp,by=c("pathway_name"="name"))
 temp$padj<-p.adjust(temp$pvalues)
-temp<-temp%>%filter(annotation!="Non-protein Signaling"&
-                    contribution.relative.1!=Inf&
+temp<-temp%>%filter(contribution.relative.1!=Inf&
                     !(pathway_name=="MHC-I"&annotation=="Secreted Signaling"))%>%
-  mutate(group=ifelse(group==T,"LA+","LA-"))
+  mutate(group=ifelse(group=="LApos","LA+","LA-"))
 i<-temp%>%filter(group=="LA+")%>%arrange(annotation,contribution.relative.1)
 temp<-temp%>%mutate(pathway_name=factor(pathway_name,levels=unique(i$pathway_name)))
 temp<-temp%>%group_by(pathway_name)%>%
@@ -119,165 +113,107 @@ pC<-temp%>%mutate(groupcol=factor(groupcol,levels=unique(groupcol)))%>%
     scale_fill_manual(values=lacols)+
     geom_hline(yintercept = .5,linetype = "dashed")
 ```
-# maybe
+## top pathways/ct
 ```{r}
-pairs <- list("LA-"=subsetCommunication(cc_res$`FALSE`),
-              "LA+"=subsetCommunication(cc_res$`TRUE`))
+pairs <- list("LA-"=subsetCommunication(cc_res$LAneg),
+              "LA+"=subsetCommunication(cc_res$LApos))
 pairs<-lapply(names(pairs), function(x) pairs[[x]]%>%mutate(has_LA=x))%>%bind_rows()
 
-i<-pairs%>%distinct(interaction_name,has_LA)%>%add_count(interaction_name)%>%
-  filter(n==1&has_LA=="hasLA")%>%select(interaction_name)%>%unlist()
-i<-pairs%>%filter(interaction_name%in%i)%>%mutate(cellinter=paste0(source," -> ",target))%>%
-  distinct(cellinter,interaction_name_2,prob,pathway_name)
-i%>%ggplot(aes(x=interaction_name_2,y=cellinter,col=prob))+geom_point()+facet_grid(~pathway_name,scales="free",space="free")+theme_minimal()+theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),strip.text.x = element_text(angle = 90,vjust = .5,hjust = 0))+scale_color_viridis_c(option = "H",trans="log10",labels=c("Min","Max"),breaks=c(1.2e-8,2.24e-5))
+i<-temp%>%filter(str_detect(groupcol,"black",negate = T))%>%
+  distinct(pathway_name)%>%unlist()
+i<-pairs%>%filter(pathway_name%in%i&source!="Erythrocytes"&target!="Erythrocytes")%>%
+  count(source,target,pathway_name,has_LA)
+temp<-i%>%filter(source!=target)%>%
+  unite(source:target,col="edge",sep = " - ")%>%
+  separate_rows(edge,sep = " - ")
+i<-i%>%filter(source==target)%>%
+  mutate(edge=source)%>%select(-c(1,2))%>%bind_rows(temp)%>%
+  group_by(edge,pathway_name,has_LA)%>%
+  summarise(n=sum(n))
 
-temp<-pairs%>%count(source,target,has_LA)%>%
-  pivot_wider(names_from = has_LA,values_from = n)%>%
-  mutate(across(hasLA:noLA,function(x) replace_na(x,0)))
-g<-graph_from_data_frame(temp[,1:2],directed = F)
-E(g)$weight=temp$hasLA
-g<-igraph::simplify(g,remove.loops = F,edge.attr.comb ="sum")
-adjmat<-get.adjacency(g,attr = "weight")
-adjmat[lower.tri(adjmat)]<-0
-adjmat<-adjmat%>%as.matrix()%>%as.data.frame()%>%
-  rownames_to_column("g1")%>%
-  pivot_longer(-1,names_to = "g2",values_to = "LA+")%>%
-  filter(`LA+`>0)
-g<-graph_from_data_frame(temp[,1:2],directed = F)
-E(g)$weight=temp$noLA
-g<-igraph::simplify(g,remove.loops = F,edge.attr.comb ="sum")
-temp1<-get.adjacency(g,attr = "weight")
-temp1[lower.tri(temp1)]<-0
-temp1<-temp1%>%as.matrix()%>%as.data.frame()%>%
-     rownames_to_column("g1")%>%
-     pivot_longer(-1,names_to = "g2",values_to = "LA-")%>%
-     filter(`LA-`>0)
-adjmat<-adjmat%>%merge(temp1,by = c("g1","g2"),all.x = T,all.y = T)
-adjmat<-adjmat%>%mutate(across(`LA+`:`LA-`,function(x) replace_na(x,0)),
-                        across(`LA+`:`LA-`,function(x) x+1e-5),
-                        FC=`LA+`/`LA-`,LFC=log(FC))
-temp1<-adjmat%>%select(g1,g2,LFC)%>%pivot_wider(names_from = g2,values_from = LFC)%>%mutate(across(-1,function(x) replace_na(x,0)))%>%column_to_rownames("g1")
+temp<-i%>%pivot_wider(names_from = has_LA,values_from = n)%>%
+  mutate(across(`LA+`:`LA-`,function(x) replace_na(x,0)+0.001),
+         LFC=log(`LA+`/`LA-`))%>%
+  select(edge,pathway_name,LFC)%>%
+  pivot_wider(names_from = pathway_name,values_from = LFC,values_fill = 0)%>%
+  column_to_rownames("edge")
+temp1<-temp/apply(temp,1,function(x) max(abs(x)))
+pD<-Heatmap(temp1,name="LFC",clustering_method_columns = "ward.D2",
+        clustering_method_rows = "ward.D2",show_row_dend = F,
+        show_column_dend = F,rect_gp = gpar(col = "white", lwd = 2),
+        row_names_side = "left")
+pD<-grid.grabExpr(draw(pD))
+
 ```
-
 ## Markers
 ```{r}
-i<-c("SERPING1","FOXO1","STAT3","CRYAB","FGF7","IDO1","MKI67","WNT4","CTNNB1")
-pG1<-DotPlot(subset(sc,cells = which(sc$harmonized_major_cell_type=="EnEpi cells")),
-             features = i,group.by = "has_LA")
-pG<-DotPlot(subset(sc,cells = which(sc$harmonized_major_cell_type=="EnS cells")),
-            features = i,group.by = "has_LA")
-temp<-pG1$data%>%mutate(celltype="EnEpi cells")%>%
-  bind_rows(pG$data%>%mutate(celltype="EnS cells"))
-pG<-temp%>%ggplot(aes(x=features.plot,y=id,col=avg.exp.scaled,size = pct.exp))+
-  geom_point()+facet_grid(rows=vars(celltype))+
-  theme_bw()+theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
-                   panel.grid = element_blank(),strip.background = element_blank())+
-  labs(x="",y="")+
-  scale_colour_gradient2(low = "darkgreen", mid = "#f7f7f7", high = "#b2182b")+
-  labs(size="Percent\nExpressed",col="Average\nexpression")
+i<-c("Prostaglandin","VISFATIN","OSM","IFN-II","VEGF","CXCL")
+i<-pairs%>%filter(pathway_name%in%i)%>%
+  distinct(ligand,receptor,pathway_name)
+i<-i%>%mutate(interaction=1:nrow(i))%>%
+  pivot_longer(1:2,names_to = "type",values_to = "gene")%>%
+  separate_rows(gene,sep = "-|_")%>%
+  mutate(interaction=paste(pathway_name,interaction))
 
+temp<-DotPlot(subset(sc,subset=has_LA=="LA+"),
+              group.by = "nosub",features = unique(i$gene))
+temp1<-DotPlot(subset(sc,subset=has_LA=="LA-"),
+               group.by = "nosub",features = unique(i$gene))
+temp<-temp$data%>%mutate(has_LA="LA+")
+temp<-temp1$data%>%mutate(has_LA="LA-")%>%bind_rows(temp)
+temp%>%ggplot(aes(x=has_LA,y=id,col=avg.exp,size=pct.exp))+geom_point()+
+  scale_color_viridis_c(option = "H")+facet_grid(~features.plot)
 
-partA<-plot_grid(pA0,pC,pE2,pG,nrow=4,align = 'v',axis = 'lr',rel_heights = c(.3,.3,.3,.2))
-partB<-plot_grid(pB0,pB1,nrow=2,align = "v",axis = 'lr',rel_heights =c(.2,.8))
-partC<-plot_grid(pD,pE,pF,ncol=3,rel_widths = c(.3,.4,.3),align = 'h',axis = "tb")
+pE<-plotGeneExpression(cc_res[[1]], signaling = "IFN-II", split.by = "datasets", type = "violin",color.use = c("#f46d43","#8DB600"))
 ```
 ## Do proteins match with transcritps?
 ```{r}
-samples<-metadata%>%filter(dom_nEndoh1_75==6&Class=="Peritoneal endometriosis")%>%
-  distinct(Run_Tissue_name)%>%unlist()
-metadata<-metadata%>%filter(Run_Tissue_name%in%samples)
 
-temp<-blobs%>%filter(Run_Tissue_name%in%samples)%>%
-  group_by(Run_Tissue_name,dbcl)%>%
-  summarise(x_min=min(x_slide_mm),
-            x_max=max(x_slide_mm),
-            y_min=min(y_slide_mm),
-            y_max=max(y_slide_mm))
-temp<-lapply(seq(0.05,1,length=10),function(x)
-  temp%>%mutate(x_min=x_min-x,x_max=x_max+x,
-                y_min=y_min-x,y_max=y_max+x))%>%bind_rows()
-temp<-temp%>%group_by(Run_Tissue_name,dbcl)%>%mutate(level=1:n())%>%ungroup()
-temp<-split(temp,f = temp$Run_Tissue_name)
 
-metadata<-split(metadata,f = metadata$Run_Tissue_name)
-neighs<-lapply(names(metadata), function(x)
-  apply(temp[[x]],1,function(y) 
-    metadata[[x]]%>%filter(x_slide_mm>as.numeric(y[3])&
-                           x_slide_mm<as.numeric(y[4])&
-                           y_slide_mm>as.numeric(y[5])&
-                           y_slide_mm<as.numeric(y[6])&
-                           str_detect(merged_corrected,"Epit|Mesen"))%>%
-          distinct(cell_ID,Run_Tissue_name,dom_nEndoh1_75,merged_corrected)%>%
-      mutate(level=y[7]))%>%
-    bind_rows)%>%bind_rows
-neighs<-neighs%>%group_by(cell_ID)%>%slice_min(level)%>%distinct()%>%ungroup()
-metadata<-metadata%>%bind_rows()
-#!!!!!!!!!!!!!!!!!!!!!!!!!!
-#you already have this saved as neigh_temp.csv
 
-neighs<-neighs%>%mutate(level=ifelse(dom_nEndoh1_75==6,0,level),
-                        cell_id=str_replace(cell_ID,".+c_","c_"))
-temp<-split(neighs,f = neighs$Run_Tissue_name)
-get_expre<-function(sample_name){
-     fname<-paste0("docs/",sample_name,"asinh.csv")
-     mat<-data.table::fread(fname)
-     mat<-mat%>%as.data.frame()%>%column_to_rownames("probe")
-     mat<-mat[,temp[[sample_name]]$cell_id]
-     colnames(mat)<-paste0(sample_name,colnames(mat))
-     return(mat)}
-neigh_mat<-lapply(names(temp),function(x) get_expre(x))
-names(neigh_mat)<-names(temp)
 
-i<-c("Beta-catenin","IL-1b","Ki-67","p53","pan-RAS","Ms IgG1","Rb IgG")
-neigh_mat<-lapply(neigh_mat,function(x) t(x[i,])%>%
-                    as.data.frame()%>%
-                    rownames_to_column("cell_ID"))%>%bind_rows()
-temp<-bind_rows(temp)
-neigh_mat<-neigh_mat%>%left_join(neighs)
 
-temp<-neigh_mat%>%group_by(Run_Tissue_name,merged_corrected,level)%>%
-  summarise(`Beta-catenin`=mean(`Beta-catenin`-`Rb IgG`),
-            p53=mean(p53-`Rb IgG`),
-            `Ki-67`=mean(`Ki-67`-`Ms IgG1`),
-            `pan-RAS`=mean(`pan-RAS`-`Ms IgG1`),
-            `IL-1b`=mean(`IL-1b`-`Ms IgG1`))
-temp%>%pivot_longer(`Beta-catenin`:`pan-RAS`,names_to = "probe",values_to = "avg")%>%ggplot(aes(x=level,group = Run_Tissue_name,col=Run_Tissue_name,y=avg))+geom_point()+facet_grid(rows=vars(merged_corrected),cols=vars(probe))+labs(x="Domain 6 ith neighbor")+stat_cor()
+
 
 ```
 
 
+
+# Metabolism
 ```{r}
-mesen<-subset(sc,cells = which(!is.na(sc$published_mesenchymal_subtype)))
-i<-mesen@meta.data%>%
-  count(published_mesenchymal_subtype,has_LA)%>%
-  filter(n<30)%>%
-  distinct(published_mesenchymal_subtype)%>%
-  unlist()%>%as.character()
-mesen<-subset(mesen,cells = which(!mesen$published_mesenchymal_subtype%in%i))
+sc<-sc.metabolism.Seurat(obj = sc, method = "VISION",
+                         imputation = F, ncores = 6, metabolism.type = "KEGG")
+#metabo<-sc@
 
-temp<-mesen@meta.data%>%distinct(has_LA,SampleName)
-props<-getTransformedProps(mesen@meta.data$published_mesenchymal_subtype,
-                           mesen@meta.data$SampleName)
-props<-props$TransformedProps[,temp$Run_Tissue_name]
-designM<-model.matrix(~0+has_LA,data=temp)#groups around replicates=samplename
-fit<-lmFit(props,designM)
-cont<-makeContrasts(has_LATRUE-has_LAFALSE,levels = designM)
-fit<-contrasts.fit(fit,cont)
-fit <- eBayes(fit, robust=TRUE)
-res<-topTable(fit,number = nrow(props),coef = 1)
-res<-res%>%rownames_to_column("cell_type")
+scmetabo<-CreateSeuratObject(counts = t(metabo[aux_table$barcode,]),meta.data = aux_table)
+bulk<-AggregateExpression(
+  scmetabo,
+  assays = "RNA",
+  return.seurat = T,
+  group.by = c("SampleName","nosub","has_LA"))
+bulk<-lapply(unique(scmetabo$nosub), function(x) 
+    subset(bulk,subset =nosub==x ))
+names(bulk)<-unique(scmetabo$nosub)
+deg<-lapply(bulk,function(x) 
+    FindMarkers(x,group.by="has_LA",ident.1="LA+",
+                ident.2="LA-",test.use="LR",logfc.threshold=0))
+deg<-lapply(names(deg),function(x) 
+    deg[[x]]%>%rownames_to_column("pathway")%>%mutate(ct=x))%>%bind_rows()
 
-res%>%arrange(logFC)%>%mutate(cell_type=factor(cell_type,levels=cell_type))%>%
-  ggplot(aes(x=logFC,y=cell_type,fill=logFC,size=adj.P.Val))+
-  geom_point(shape=21)+scale_size(range=c(8,1),breaks = c(0.5,0.05))+
-  scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
-  theme_minimal(base_size = 14)+
-  labs(x="LFC",y="",col="LFC",size="Adj. P-val")
+
+
+pJ<-deg%>%ggplot(aes(y=pathway,x=avg_log2FC))+geom_density_ridges(alpha=0.1)+
+    #geom_jitter(aes(col=celltype,size= adj.P.Val),height = .1,alpha=0.5)+
+    theme_classic()+#scale_color_manual(values=alt_cellcols)+
+    theme(axis.line.y = element_blank(),axis.ticks.y = element_blank())+
+    scale_size(range=c(6,.5))+
+    guides(colour = "none")+geom_vline(xintercept = 0)
+
 
 
 ```
 
-
+# maybe
 ## Markers
 ```{r}
 temp<-metadata%>%filter(dom_nEndoh1_75=="6")

@@ -306,12 +306,12 @@ hm<-grid.grabExpr(draw(hm))
 plot_grid(hm,p0,align = "h",axis = "tb")
 
 
-#partA<-plot_grid(hm0,p1,lgd0,ncol=3,rel_widths = c(.6,.2,.2))
-#partB<-plot_grid(pB+theme(legend.position = "bottom")+theme(plot.margin=grid::unit(c(1,10,0,-3), "mm")),pB1+theme(plot.margin=grid::unit(c(0,0,0,-15), "mm")),align="h",axis="tb",rel_widths = c(.6,.4))
-#partC<-plot_grid(pC+theme(legend.position = "bottom")+theme(plot.margin=grid::unit(c(1,10,0,-3), "mm")),pC1+theme(plot.margin=grid::unit(c(0,0,0,-15), "mm")),align="h",axis="tb",rel_widths = c(.6,.4))
-#partD<-plot_grid(pD,pE+theme(legend.position = "top"),align = "h",axis="tb",rel_widths = c(.6,.4))
-pdf("fig1.pdf",width = 9,height = 12)
-plot_grid(partA,partB,nrow=2,rel_heights = c(.6,.4))
+#partA<-plot_grid(pC+theme(axis.text = element_text(size=10),legend.position = "left",plot.margin=grid::unit(c(1,10,0,-3), "mm")),pC1+theme(axis.text = element_text(size=10),plot.margin=grid::unit(c(0,0,0,-15), "mm")),align="h",axis="tb",rel_widths = c(.8,.2),labels=c('B',''))
+#partB<-plot_grid(pE+theme(axis.text = element_text(size=10)),pE1+theme(axis.text = element_text(size=10)),align="h",axis="tb",labels=c('C','D'))
+#partA<-plot_grid(NULL,plot_grid(partA,partB,nrow = 2,rel_heights = c(.4,.6)),rel_widths = c(.55,.45))
+#partB<-plot_grid(pF+theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1)),pF1+theme(legend.position = "n"),NULL,ncol=3,rel_widths = c(.25,.25,.5),labels = c('E','F','G'))
+pdf("temp.pdf",width = 14,height = 8)
+plot_grid(partA,partB,nrow=2)
 dev.off()
 
 save(hm0,p1,lgd0,pB,pB1,pC,pC1,pE,pH1,pI,

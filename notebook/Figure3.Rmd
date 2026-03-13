@@ -310,55 +310,6 @@ dev.off()
 
 ```
 
-# Metabolism
-```{r}
-library(scMetabolism)
-sc<-readRDS("/media/Lawrenson_Lab_NAS/caipirinha/speed/share/fixed_annotated_aux.seurat.rds")
-sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"))
-sc$has_LA<-sc$LA_per_Sample>0
-
-#can't get it working with vision or ssgsea
-sc<-sc.metabolism.Seurat(obj = sc, method = "VISION",
-                         imputation = F, ncores = 6, metabolism.type = "KEGG")
-#scmetabo<-sc@
-
-scmetabo<-scmetabo%>%
-  mutate(across(`Glycolysis / Gluconeogenesis`:`Drug metabolism - other enzymes`,function(x) 100*x))
-temp<-split(scmetabo,by = "harmonized_major_plus_immune_cell_type")
-designM<-lapply(temp,function(x) model.matrix(~0+has_LA,data=x))#groups around 
-fit<-lapply(names(temp),function(x) 
-  lmFit(temp[[x]]%>%select(1,4:88)%>%
-          column_to_rownames("Cell")%>%t(),designM[[x]]))
-names(fit)<-names(temp)
-cont<-lapply(designM,function(x) makeContrasts(has_LATRUE-has_LAFALSE,levels = x))
-fit<-lapply(names(temp),function(x) contrasts.fit(fit[[x]],cont[[x]]))
-fit <- lapply(fit,function(x) eBayes(x, robust=TRUE))
-
-res<-lapply(fit,function(x) topTable(x,number = 85,coef = 1))
-names(res)<-names(temp)
-res<-lapply(names(res),function(x) 
-  res[[x]]%>%mutate(celltype=x)%>%
-    rownames_to_column("pathway"))%>%bind_rows()
-
-i<-scmetabo%>%count(harmonized_major_plus_immune_cell_type,has_LA)%>%
-  filter(n<100)%>%distinct(harmonized_major_plus_immune_cell_type)%>%unlist()
-j<-res%>%group_by(pathway)%>%summarise(logFC=mean(logFC))%>%slice_min(logFC,n=5)
-j<-res%>%group_by(pathway)%>%summarise(logFC=mean(logFC))%>%slice_max(logFC,n=5)%>%bind_rows(j)
-j<-j%>%arrange(logFC)
-pJ<-res%>%filter(pathway%in%j$pathway&str_detect(celltype,"EnS|EnEp|theli|Mesen|Smoot",negate = T))%>%
-    mutate(pathway=factor(pathway,levels=j$pathway))%>%
-    ggplot(aes(y=pathway,x=logFC))+geom_density_ridges(alpha=0.1)+
-    #geom_jitter(aes(col=celltype,size= adj.P.Val),height = .1,alpha=0.5)+
-    theme_classic()+#scale_color_manual(values=alt_cellcols)+
-    theme(axis.line.y = element_blank(),axis.ticks.y = element_blank())+scale_size(range=c(6,.5))+
-    guides(colour = "none")+geom_vline(xintercept = 0)
-
-
-partA<-plot_grid(pA1+theme(legend.position = "none"),pA2+theme(legend.position = "bottom"),pB+theme(legend.position = "bottom",axis.text.x = element_text(angle=0)),pBA,pF,ncol=5,rel_widths = c(.2,.2,.2,.15,.3),align = 'h',axis = 'tb')
-partB<-plot_grid(pC,pD,pE,pG,ncol=4,align = "h",axis = 'tb',rel_widths = c(.2,.15,.45,.2))
-
-```
-
 # maybe
 ## per cell
 ```{r}

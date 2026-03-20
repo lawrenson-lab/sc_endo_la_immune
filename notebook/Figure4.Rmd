@@ -26,32 +26,7 @@ cellcols<-c("#8DB600","#fdae61","#a95f96","#0067A5","#604E97",
             "#f46d43","black","#BE0032","cornflowerblue")
 names(cellcols)<-c("B cells","Plasma cells","CD4 T cells","CD8 T cells",
                    "NK cells","Myeloid cells","unknown","Epithelial","Stroma")
-lacols<-c("LA+"="#8DB600","LA-"="#f46d43",none="black")
-```
-# Dotplot of relevant genes
-```{r}
-deg<-read_csv("docs/has_laDEG-nosub_bulk-MAST.tsv")
-gsea_bp<-read_csv("docs/has_laDEG-nosubbulk-GSEA-BPsimpl.csv")
-
-i<-gsea_bp%>%filter(NES>0)%>%add_count(Description)%>%
-  filter(n>4)%>%distinct(Description)%>%unlist()
-i<-gsea_bp%>%filter(Description%in%i)%>%
-  separate_rows(core_enrichment,sep = "/")%>%
-  distinct(core_enrichment,ct)%>%
-  add_count(core_enrichment)%>%filter(n>1)%>%
-  distinct(core_enrichment)%>%unlist()
-i<-deg%>%filter(gene%in%i)%>%group_by(gene)%>%
-  summarise(up_in=sum(avg_log2FC>1),
-            median_LFC=median(avg_log2FC))%>%
-  filter(up_in>11&median_LFC>1)%>%distinct(gene)%>%unlist()
-#i<-deg%>%filter(p_val_adj<0.05&avg_log2FC>1)%>%distinct(gene)%>%unlist()%>%c(i)
-
-pA<-deg%>%filter(gene%in%i)%>%
-  ggplot(aes(x=gene,y=ct,col=avg_log2FC,size=p_val))+geom_point()+
-  scale_size(range=c(5,.5),trans="log10")+
-  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
-  theme_classic()+theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
-  labs(y="",col="LFC",size="P-val")
+lacols<-c("LA+"="#CE1261FF","LA-"="#B2DF8AFF",none="white")
 ```
 # Progeny
 ```{r}
@@ -60,7 +35,7 @@ progeny<-aux_table%>%select(barcode,has_LA,nosub,SampleName)%>%
   inner_join(progeny,by=c("barcode"="Cell"))
 
 temp<-progeny%>%filter(str_detect(nosub,"En|Mes|Smoo",negate = T))%>%
-  select(SampleName,has_LA,nosub,`JAK-STAT`,NFkB,TGFb,TNFa)%>%
+  select(SampleName,has_LA,nosub,`JAK-STAT`,NFkB,VEGF,TNFa)%>%
   pivot_longer(`JAK-STAT`:TNFa)
 temp1<-temp%>%group_by(SampleName,has_LA,nosub,name)%>%
   summarise(avg_activity=mean(value))%>%
@@ -68,14 +43,18 @@ temp1<-temp%>%group_by(SampleName,has_LA,nosub,name)%>%
   wilcox_test(avg_activity~has_LA)
 #temp1$padj<-p.adjust(temp1$p,"fdr")#nothing is significant
 
-pB<-temp%>%mutate(has_LA=factor(has_LA,levels = c("LA+","LA-")))%>%
-  ggplot(aes(x=value,col=has_LA,y=nosub))+
-    ggridges::geom_density_ridges(fill="white",alpha=.1)+
-  facet_grid(~name,scales="free_x")+theme_bw()+
-  scale_colour_manual(values=lacols)+geom_vline(xintercept = 0)+
-  theme(strip.background = element_blank(),panel.grid = element_blank())
-
-plot_grid(pA,pB,rel_widths = c(.4,.6))
+i<-aux_table%>%filter(str_detect(nosub,"En|Mes|Smoo",negate = T))%>%
+  count(nosub,has_LA)%>%pivot_wider(names_from = has_LA,values_from = n)%>%
+  mutate(ratio=`LA+`/`LA-`)%>%arrange(desc(ratio))%>%select(nosub)%>%unlist()
+i<-i[c(1:3,5,6,9,11,10,12,7,8,13,4,14)]
+pA<-temp%>%mutate(has_LA=factor(has_LA,levels = c("LA+","LA-")),
+                  nosub=factor(nosub,level=rev(i)))%>%
+    ggplot(aes(x=value,fill=has_LA,y=nosub))+
+    geom_boxplot()+
+    facet_grid(cols=vars(name),scales="free_x")+theme_bw()+
+    scale_fill_manual(values=lacols)+theme(panel.grid = element_blank(),
+                                         strip.background = element_blank())+
+  labs(fill="Status")
 ```
 
 # Cell chat
@@ -89,64 +68,64 @@ temp<-cc_res[[1]]@LR$LApos$LRsig%>%
   distinct(pathway_name,annotation)%>%
   inner_join(temp,by=c("pathway_name"="name"))
 temp$padj<-p.adjust(temp$pvalues)
-temp<-temp%>%filter(contribution.relative.1!=Inf&
-                    !(pathway_name=="MHC-I"&annotation=="Secreted Signaling"))%>%
+temp<-temp%>%add_count(pathway_name)%>%
+  filter(n==2|(n==4&annotation=="Cell-Cell Contact"))%>%select(-n)%>%
   mutate(group=ifelse(group=="LApos","LA+","LA-"))
 i<-temp%>%filter(group=="LA+")%>%arrange(annotation,contribution.relative.1)
-temp<-temp%>%mutate(pathway_name=factor(pathway_name,levels=unique(i$pathway_name)))
 temp<-temp%>%group_by(pathway_name)%>%
   slice_max(contribution)%>%
   mutate(group=ifelse(padj>0.05,"none",group))%>%
   ungroup()%>%add_count(pathway_name)%>%
-  mutate(group=ifelse(n==2,"none",group))%>%
-  mutate(groupcol=paste0("<span style='color:",
-                      lacols[group],";'>",pathway_name,"</span>"))%>%
-  distinct(pathway_name,groupcol)%>%right_join(temp)
+  mutate(group=ifelse(n==2,"none",group),
+         pathway_name=factor(pathway_name,levels=unique(i$pathway_name)))%>%
+  distinct()
 
-pC<-temp%>%mutate(groupcol=factor(groupcol,levels=unique(groupcol)))%>%
-  ggplot(aes(x=groupcol,y=contribution,fill=group))+
-    geom_bar(stat="identity",position = "fill")+theme_minimal()+
-    facet_grid(~annotation,scales="free_x",space="free")+
-    theme(axis.text.x.bottom  = element_markdown(angle=45,vjust = 1,hjust = 1),
-          strip.background = element_blank())+
-    labs(x="Pathway",y="Contribution",fill="Status")+
-    scale_fill_manual(values=lacols)+
-    geom_hline(yintercept = .5,linetype = "dashed")
-```
 ## top pathways/ct
-```{r}
 pairs <- list("LA-"=subsetCommunication(cc_res$LAneg),
               "LA+"=subsetCommunication(cc_res$LApos))
 pairs<-lapply(names(pairs), function(x) pairs[[x]]%>%mutate(has_LA=x))%>%bind_rows()
+pairs<-pairs%>%filter(source!="Erythrocytes"&target!="Erythrocytes")
 
-i<-temp%>%filter(str_detect(groupcol,"black",negate = T))%>%
-  distinct(pathway_name)%>%unlist()
-i<-pairs%>%filter(pathway_name%in%i&source!="Erythrocytes"&target!="Erythrocytes")%>%
-  count(source,target,pathway_name,has_LA)
-temp<-i%>%filter(source!=target)%>%
-  unite(source:target,col="edge",sep = " - ")%>%
-  separate_rows(edge,sep = " - ")
-i<-i%>%filter(source==target)%>%
-  mutate(edge=source)%>%select(-c(1,2))%>%bind_rows(temp)%>%
-  group_by(edge,pathway_name,has_LA)%>%
+i<-pairs%>%count(source,target,pathway_name,has_LA)
+temp1<-i%>%filter(source!=target)%>%
+  unite(source:target,col="ct",sep = " - ")%>%
+  separate_rows(ct,sep = " - ")
+temp1<-i%>%filter(source==target)%>%
+  mutate(ct=source)%>%select(-c(1,2))%>%bind_rows(temp1)%>%
+  group_by(ct,pathway_name,has_LA)%>%
   summarise(n=sum(n))
 
-temp<-i%>%pivot_wider(names_from = has_LA,values_from = n)%>%
+temp1<-temp1%>%mutate(n=n+.001)%>%
+  pivot_wider(names_from = has_LA,values_from = n)%>%
   mutate(across(`LA+`:`LA-`,function(x) replace_na(x,0)+0.001),
          LFC=log(`LA+`/`LA-`))%>%
-  select(edge,pathway_name,LFC)%>%
+  select(ct,pathway_name,LFC)%>%#filter(str_detect(ct,"En|Mes|Smo",negate = T))%>% #intersting pathway are immune - nonimmune
   pivot_wider(names_from = pathway_name,values_from = LFC,values_fill = 0)%>%
-  column_to_rownames("edge")
-temp1<-temp/apply(temp,1,function(x) max(abs(x)))
-pD<-Heatmap(temp1,name="LFC",clustering_method_columns = "ward.D2",
+  column_to_rownames("ct")
+temp1<-temp1/apply(temp1,1,function(x) max(abs(x)))
+temp1<-temp1[,levels(temp$pathway_name)]#order ct by enrichment?
+temp<-temp[order(match(temp$pathway_name,colnames(temp1))),]
+pB<-Heatmap(temp1,name="LFC",cluster_columns = F,
+            column_split = temp$annotation,column_names_rot = 45,
+            top_annotation = HeatmapAnnotation(enriched=temp$group,
+                                               col=list(enriched=lacols)),
         clustering_method_rows = "ward.D2",show_row_dend = F,
         show_column_dend = F,rect_gp = gpar(col = "white", lwd = 2),
         row_names_side = "left")
-pD<-grid.grabExpr(draw(pD))
+pB<-grid.grabExpr(draw(pB))
 
 ```
 ## Markers
 ```{r}
+deg<-read_csv("docs/has_laDEG-nosub_bulk-MAST.tsv")
+#degsc<-read_csv("docs/has_laDEG-ct100-MAST.tsv",skip=1)
+i<-deg%>%filter(avg_log2FC>=.3)%>%distinct(gene,ct)#ideal LFC threshold
+temp<-pairs%>%inner_join(i,by=c("ligand"="gene","source"="ct"))
+temp<-temp%>%inner_join(i,by=c("receptor"="gene","target"="ct"))
+temp<-temp%>%pivot_wider(names_from = has_LA,values_from = prob)%>%
+  filter(`LA+`>`LA-`|is.na(`LA-`))%>%pivot_longer(`LA+`:`LA-`,names_to = "has_LA",values_to = "prob")
+temp%>%filter(str_detect(interaction_name_2,"COL",negate=T))%>%ggplot(aes(y=paste0(source,' - ',target),x=has_LA,col=prob))+geom_point()+theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+facet_wrap(~interaction_name_2,scales="free",space="free_y",ncol=2)+scale_color_viridis_c(option = "H")
+
 i<-c("Prostaglandin","VISFATIN","OSM","IFN-II","VEGF","CXCL")
 i<-pairs%>%filter(pathway_name%in%i)%>%
   distinct(ligand,receptor,pathway_name)
@@ -168,9 +147,13 @@ pE<-plotGeneExpression(cc_res[[1]], signaling = "IFN-II", split.by = "datasets",
 ```
 ## Do proteins match with transcritps?
 ```{r}
-
-
-
+files<-list.files()
+files<-files[str_detect(files,"dom_marke")]
+domMarkers<-lapply(files,read_csv)
+names(domMarkers)<-str_remove(files,"_dom.+")
+domMarkers<-lapply(names(domMarkers),function(x) domMarkers[[x]]%>%mutate(ct=x))%>%bind_rows()
+i<-as.data.frame(cbind(symbol=c("TNFRSF9","TNFRSF18","RELA"),gene=c("4-1BB","GITR","NF-kB p65")))
+domMarkers%>%filter(cluster=="g3")%>%inner_join(i)%>%ggplot(aes(x=gene,y=ct,col=avg_log2FC,size = p_val))+geom_point()+geom_point(data=domMarkers%>%filter(cluster=="g3"&p_val_adj<0.05)%>%inner_join(i),col="black",shape=1,stroke=1.5)+scale_color_gradient2(low = "blue",mid = "white",high = "red")+scale_size(range=c(5,.1))+facet_grid(~symbol,scales="free",space="free")+theme_minimal()+ggtitle("CosMx")
 
 
 
@@ -184,7 +167,7 @@ pE<-plotGeneExpression(cc_res[[1]], signaling = "IFN-II", split.by = "datasets",
 sc<-sc.metabolism.Seurat(obj = sc, method = "VISION",
                          imputation = F, ncores = 6, metabolism.type = "KEGG")
 #metabo<-sc@
-
+metabo%>%write_csv("docs/scMetabolism_res.csv")
 scmetabo<-CreateSeuratObject(counts = t(metabo[aux_table$barcode,]),meta.data = aux_table)
 bulk<-AggregateExpression(
   scmetabo,

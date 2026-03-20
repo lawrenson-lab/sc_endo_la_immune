@@ -269,12 +269,15 @@ pG<-temp%>%ggplot(aes(x=STATUS,y=ct,fill=n))+
                           axis.ticks.y = element_blank())+
     labs(y="",fill="Enriched\nprocess")
 
-i<-gsea_bp%>%filter(NES>0)%>%add_count(Description)%>%
-  filter(n>4)%>%distinct(Description)%>%unlist()
-temp<-gsea_bp%>%filter(Description%in%i&ct%in%pE$data$cell_type)%>%
-  add_count(Description)%>%arrange(n,Description)%>%
-  mutate(Description=factor(Description,levels=rev(unique(Description))),
-         ct=factor(ct,levels = unique(ct)))
+i<-pG$data%>%group_by(STATUS)%>%slice_max(n,n=5)%>%filter(n>50)
+j<-split(i,f = i$STATUS)%>%lapply(function(x) x$ct)
+j$`LA+`<-gsea_bp%>%filter(ct%in%i$`LA+`)%>%group_by(ct)%>%
+  slice_max(NES,n = 5)%>%ungroup()%>%distinct(Description)%>%unlist()
+temp<-gsea_bp%>%filter(Description%in%i$`LA+`&
+                         str_detect(ct,"En|Smo|Mes",negate = T))%>%
+    arrange(ct)%>%mutate(Description=factor(Description,
+                                            levels=unique(Description)),
+           ct=factor(ct,levels = unique(ct)))
 pH<-temp%>%ggplot(aes(x=ct,y=Description,size =p.adjust,col=NES))+geom_point()+
     theme_bw()+labs(x="",y="")+
     theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
@@ -282,12 +285,14 @@ pH<-temp%>%ggplot(aes(x=ct,y=Description,size =p.adjust,col=NES))+geom_point()+
     scale_size(range=c(5,1))
 pH1<-pH$data%>%distinct(ct)%>%ggplot(aes(x=ct,fill=ct,y=1))+geom_tile()+
   scale_fill_manual(values=alt_cellcols)+theme_void()+theme(legend.position = "n")
-i<-gsea_bp%>%filter(NES<0)%>%add_count(Description)%>%
-    filter(n>4)%>%distinct(Description)%>%unlist()
-temp<-gsea_bp%>%filter(Description%in%i&ct%in%pE$data$cell_type)%>%
-  add_count(Description)%>%arrange(n,Description)%>%
-  mutate(Description=factor(Description,levels=rev(unique(Description))),
-         ct=factor(ct,levels = unique(ct)))
+
+j$`LA-`<-gsea_bp%>%filter(ct%in%i$`LA-`)%>%group_by(ct)%>%
+    slice_min(NES,n = 10)%>%ungroup()%>%distinct(Description)%>%unlist()
+temp<-gsea_bp%>%filter(Description%in%i$`LA-`&
+                         str_detect(ct,"En|Smo|Mes",negate = T))%>%
+    arrange(ct)%>%mutate(Description=factor(Description,
+                                            levels=unique(Description)),
+           ct=factor(ct,levels = unique(ct)))
 pI<-temp%>%ggplot(aes(x=ct,y=Description,size =p.adjust,col=NES))+geom_point()+
     theme_bw()+labs(x="",y="")+
     theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
@@ -296,7 +301,21 @@ pI<-temp%>%ggplot(aes(x=ct,y=Description,size =p.adjust,col=NES))+geom_point()+
 pI1<-pI$data%>%distinct(ct)%>%ggplot(aes(x=ct,fill=ct,y=1))+geom_tile()+
   scale_fill_manual(values=alt_cellcols)+theme_void()+theme(legend.position = "n")
 
-
+i<-gsea_bp%>%filter(Description%in%unlist(j)&ct%in%i$ct)%>%
+  separate_rows(core_enrichment,sep = '/')%>%
+  mutate(gene=core_enrichment)%>%distinct(ct,Description,gene)
+temp<-i%>%inner_join(deg)%>%group_by(ct,Description)%>%
+  slice_max(abs(avg_log2FC),n = 3)
+j<-temp%>%filter(str_detect(Description,"B|^nitri|chromatin")&ct!="B-cells")%>%
+  ungroup()%>%distinct(Description,gene)
+pJ<-deg%>%inner_join(j)%>%filter(str_detect(ct,"En|Mes|Smo",negate = T))%>%
+  mutate(ct=factor(ct,levels = levels(pG$data$ct)))%>%
+  ggplot(aes(x=gene,y=ct,col=avg_log2FC,size=p_val))+geom_point()+
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+    scale_size(range=c(5,1),breaks = c(.001,.01,.1,1))+
+  facet_grid(~Description,scales="free_x",space="free")+
+  theme_bw()+theme(strip.background = element_blank())+
+  labs(y="Cell type",col="LFC",size="P-val")
 
 partA<-plot_grid(NULL,pA,pC,nrow=3,rel_heights = c(.2,.4,.4))
 partB<-plot_grid(NULL,pB0,pB1+theme(axis.text.x = element_text(angle=0,vjust = 1,hjust = .5)),nrow=3,rel_heights = c(.45,.15,.4),align = "v",axis = "lr")

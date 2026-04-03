@@ -191,16 +191,19 @@ alt_cellcols["Plasmablast/Plasma cells"]<-cellcols["Plasma cells"]
 weird <- scales::trans_new("signed_sqrt",
        transform=function(x) sign(x)*sqrt(abs(x)),
        inverse=function(x) sign(x)*x**2)
-pF<-aux_table%>%
-    count(nosub,Class)%>%
-    mutate(n=ifelse(Class=="Eutopic endometrium",-n,n),
-      nosub=factor(nosub,levels=rev(levels(pF1$data$nosub))))%>%
-    ggplot(aes(y=nosub,x=n,
-               fill=nosub))+geom_col()+
-    scale_x_continuous(transform = weird)+
-    theme_bw()+theme(legend.position = "none")+
-    scale_fill_manual(values=alt_cellcols)+labs(y="",x="Cells")+
-    geom_vline(xintercept = 0)
+temp<-aux_table%>%count(nosub,Class)
+i<-temp%>%filter(Class=="Peritoneal endometriosis")%>%
+  arrange(n)%>%distinct(nosub)%>%unlist()
+pF<-temp%>%mutate(nosub=factor(nosub,levels=i),
+                  Class=factor(Class,levels=rev(names(classcols))))%>%
+  ggplot(aes(x=n,y=Class,fill=nosub))+geom_col()+
+  facet_grid(rows=vars(nosub),switch="y")+
+  scale_x_log10()+scale_fill_manual(values=alt_cellcols)+
+  theme_classic()+theme(legend.position = "n",strip.background =element_blank(),
+                        strip.text.y.left = element_text(angle=0,vjust = .5,hjust = 1),
+                        panel.spacing = unit(.02, "lines"),axis.text.y = element_blank(),
+                        axis.line.y = element_blank(),axis.ticks.y = element_blank())+
+  labs(x="Cells",y="")
 ```
 ## Subsets 
 ```{r}
@@ -230,12 +233,25 @@ i<-temp%>%distinct(ct,nosub)%>%
   arrange(ct,nosub)
 alt_cellcols<-alt_cellcols[i$nosub]
 pF1<-coords%>%
-  mutate(nosub=factor(nosub,levels=names(alt_cellcols)))%>%
-  ggplot(aes(x=umap_1,y=umap_2,col=nosub))+
-  geom_point(size=.1)+scale_color_manual(values=alt_cellcols)+
-  guides(col=guide_legend(override.aes = list(size=5),ncol=1))+
-  facet_grid(cols=vars(Class),rows=vars(ct),switch="y")+theme_void()+
-  theme(strip.text.y.left = element_text(angle = 90))+labs(col="cell type")
+    mutate(nosub=factor(nosub,levels=names(alt_cellcols)))%>%
+    ggplot(aes(x=umap_1,y=umap_2,col=nosub))+
+    geom_point(size=.1)+geom_text_repel(data=coords%>%
+                                          distinct(nosub,center1,center2),
+                                        aes(x=center1,y=center2,label=nosub),
+                                        col="black")+
+    scale_color_manual(values=alt_cellcols)+
+    guides(col=guide_legend(override.aes = list(size=5),ncol=1))+
+    facet_grid(~ct)+theme_light()+
+    theme(strip.background = element_blank(),axis.text.x = element_blank(),
+          legend.position = "n",plot.margin=grid::unit(c(0,1,-5,0),"mm"))+
+  labs(col="cell type",x="")
+pF2<-coords%>%ggplot(aes(x=umap_1,y=umap_2))+
+    stat_density_2d(aes(fill = ..level..), geom = "polygon")+
+    facet_grid(rows=vars(Class),cols=vars(ct))+
+    scale_fill_viridis_c(option = "B",direction = -1,labels=c("Min","Max"),breaks=c(0,.01))+
+    theme_light()+theme(strip.background = element_blank(),
+                        strip.text.y.right = element_text(colour ="black"))+
+    labs(x="UMAP 1",y="UMAP 2")
 ```
 # CellChat
 ```{r}
@@ -245,6 +261,8 @@ library(ggrepel)
 names(alt_cellcols)<-sort(unique(aux_table$harmonized_major_plus_immune_cell_type))
 
 cc_res<-readRDS("docs/CellChat_endo_class_PE_Eutopic_exclude.rds")
+#cc_res<-readRDS("docs/CellChat_nosubPE_Eu.rds")
+
 cc_res$`Eutopic endometrium`<-netAnalysis_computeCentrality(cc_res$`Eutopic endometrium`)
 cc_res$`Peritoneal endometriosis`<-netAnalysis_computeCentrality(cc_res$`Peritoneal endometriosis`)
 
@@ -254,26 +272,42 @@ names(temp)<-names(cc_res)[-1]
 temp<-lapply(names(temp), function(x) 
   temp[[x]]%>%as.data.frame()%>%mutate(Class=x)%>%
     rownames_to_column("ct"))%>%bind_rows()
+colnames(temp)[2]<-"total_interactions"
 
 pG<-temp%>%filter(ct!="Erythrocytes")%>%
-  mutate(total_interactions=ifelse(Class=="Eutopic endometrium",
-                                   -total_interactions,total_interactions),
-         ct=factor(ct,levels=figlevs))%>%
-  ggplot(aes(x=total_interactions,y=ct,fill=ct))+geom_col()+
-  theme_bw()+theme(legend.position = "none")+
-  scale_fill_manual(values=alt_cellcols)+
-  labs(y="",x="Total interaction")+
-    geom_vline(xintercept = 0)
+    ggplot(aes(y=ct,x=abs(total_interactions),fill=Class))+
+    geom_bar(stat="identity",position="fill")+
+    geom_vline(xintercept = .5)+
+    theme_classic()+theme(axis.line.y = element_blank(),
+                          legend.position = "none")+
+    scale_fill_manual(values=classcols)+
+    labs(y="",x="Total interaction")
 
-#like netVisual_heatmap(cc_res[[1]],comparison = c(1,2),measure = "count",color.use = lala,sources.use = names(alt_cellcols),targets.use = names(alt_cellcols))
-temp<-cc_res$`Peritoneal endometriosis`@net$count
-temp<-log(temp/(cc_res$`Eutopic endometrium`@net$count+0.1))
+mats<-lapply(cc_res[-1],function(x) x@net$count)
+mats<-lapply(mats,function(x) x+t(x)-diag(diag(x)))
+mats$`Eutopic endometrium`[lower.tri(mats$`Eutopic endometrium`)]<-0
+mats$`Peritoneal endometriosis`[lower.tri(mats$`Peritoneal endometriosis`)]<-0
+temp<-log(mats$`Peritoneal endometriosis`/(mats$`Eutopic endometrium`+0.1))
+temp<-temp%>%as.data.frame()%>%rownames_to_column("ct1")%>%
+  pivot_longer(-1,names_to = "ct2",values_to = "LFC")%>%
+  filter(abs(LFC)!=Inf)
 
-i<-rev(levels(pG$data$ct))
-i<-i[i!="Early Exhausted CD8 T-cells (2)"]
-pH<-Heatmap(temp[i,i],cluster_columns = F,cluster_rows = F,top_annotation = HeatmapAnnotation(target=anno_simple(i,col=alt_cellcols)),left_annotation = rowAnnotation(source=anno_simple(i,col=alt_cellcols)),name="LFC",show_row_names = F,show_column_names = F)
-pH<-grid.grabExpr(draw(pH))
-plot_grid(pF,pF1+theme(legend.position = "n"),pG,pH,ncol = 4)
+interaction_plot<-function(ct){
+  df<-temp%>%
+    filter(ct1==ct|ct2==ct)
+  plot<-df%>%mutate(partner=ifelse(ct1==ct,ct2,ct1),
+                  class=ifelse(LFC>0,"Peritoneal endometriosis",
+                               "Eutopic endometrium"))%>%
+  filter(partner!="Erythrocytes")%>%arrange(LFC)%>%
+  mutate(partner=factor(partner,levels = partner))%>%
+  ggplot(aes(y=partner,x=LFC,fill=class))+geom_col()+
+  scale_fill_manual(values=classcols)+theme_classic()+
+  theme(axis.line.y = element_blank(),legend.position="n")+
+  geom_vline(xintercept = 0)+ggtitle(ct)
+return(plot)}
+
+pH<-lapply(c("Plasmablast/Plasma cells","Mesothelial cells","EnEpi cells","Dendritic Cells"),interaction_plot)
+
 ```
 # CosMx neighbors
 ```{r}

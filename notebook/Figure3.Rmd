@@ -196,8 +196,7 @@ temp<-aux_table%>%count(has_LA,nosub)%>%
 pE1<-temp%>%mutate(nosub=factor(nosub,levels=rev(pE$data$cell_type)))%>%
   ggplot(aes(x=n,y=has_LA,fill=nosub))+
   geom_col()+scale_fill_manual(values=alt_cellcols)+
-  facet_grid(rows=vars(nosub),
-             scales="free",space="free",switch='y')+theme_classic()+
+  facet_grid(rows=vars(nosub),switch='y')+theme_classic()+
   theme(legend.position = "n",strip.background =element_blank(),
         strip.text.y.left = element_text(angle=0,vjust = .5,hjust = 1),
         panel.spacing = unit(.02, "lines"),axis.text.y = element_blank(),

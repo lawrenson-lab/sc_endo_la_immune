@@ -351,6 +351,34 @@ deg<-lapply(names(deg),function(x)
 ```
 
 ```{r}
+i<-gsea_bp%>%separate_rows(core_enrichment,sep = '/')%>%distinct(ct,core_enrichment)
+colnames(i)[2]<-"gene"
+subdeg<-deg%>%inner_join(i)
+
+avgLAneg<-AverageExpression(subset(sc,subset = has_LA=="LA+"),
+                            group.by = "nosub")%>%rownames_to_column("gene")%>%
+  pivot_longer(names_to = "ct",values_to = "LA-")
+avgLApos<-AverageExpression(subset(sc,subset = has_LA=="LA+"),
+                            group.by = "nosub")%>%rownames_to_column("gene")%>%
+  pivot_longer(names_to = "ct",values_to = "LA+")
+avgLAneg%>%inner_join(avgLApos)%>%write_csv("docs/hasLA_nosub_avg.csv")
+
+subdeg<-avgs%>%group_by(ct)%>%
+  filter(`LA-`>quantile(`LA-`,.95)|`LA+`>quantile(`LA+`,.95))%>%#0.5 for Th2 cells
+  inner_join(subdeg)
+subdeg<-subdeg%>%slice_max(abs(avg_log2FC),n=15)
+subdeg<-gsea_bp%>%separate_rows(core_enrichment,sep = '/')%>%
+  mutate(gene=core_enrichment)%>%select(Description,NES,gene,ct)%>%
+  right_join(subdeg,by=c("ct","gene"))
+
+subdeg<-subdeg%>%mutate(diff=`LA+`-`LA-`)%>%
+  filter((avg_log2FC>0&diff>0&NES>0)|(avg_log2FC<0&diff<0&NES<0))%>%
+  select(-c(p_val,pct.1,pct.2,NES))%>%group_by(ct,gene)%>%
+  mutate(Description=paste(sort(unique(Description)),collapse = ','))%>%distinct()
+```
+
+
+```{r}
 m_df <- msigdbr(species = "Homo sapiens")%>%
   filter(str_detect(gs_collection_name,"Process|Reactome"))
 i<-c("DGLUCY","GLS2","GLS","GLUD2","GLUD1")

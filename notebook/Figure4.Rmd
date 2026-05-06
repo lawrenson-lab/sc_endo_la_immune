@@ -26,7 +26,6 @@ cellcols<-c("#8DB600","#fdae61","#a95f96","#0067A5","#604E97",
             "#f46d43","black","#BE0032","cornflowerblue")
 names(cellcols)<-c("B cells","Plasma cells","CD4 T cells","CD8 T cells",
                    "NK cells","Myeloid cells","unknown","Epithelial","Stroma")
-lacols<-c("LA+"="#CE1261FF","LA-"="#B2DF8AFF",none="white")
 ```
 # Progeny
 ```{r}
@@ -161,40 +160,6 @@ domMarkers%>%filter(cluster=="g3")%>%inner_join(i)%>%ggplot(aes(x=gene,y=ct,col=
 ```
 
 
-
-# Metabolism
-```{r}
-sc<-sc.metabolism.Seurat(obj = sc, method = "VISION",
-                         imputation = F, ncores = 6, metabolism.type = "KEGG")
-#metabo<-sc@
-metabo%>%write_csv("docs/scMetabolism_res.csv")
-scmetabo<-CreateSeuratObject(counts = t(metabo[aux_table$barcode,]),meta.data = aux_table)
-bulk<-AggregateExpression(
-  scmetabo,
-  assays = "RNA",
-  return.seurat = T,
-  group.by = c("SampleName","nosub","has_LA"))
-bulk<-lapply(unique(scmetabo$nosub), function(x) 
-    subset(bulk,subset =nosub==x ))
-names(bulk)<-unique(scmetabo$nosub)
-deg<-lapply(bulk,function(x) 
-    FindMarkers(x,group.by="has_LA",ident.1="LA+",
-                ident.2="LA-",test.use="LR",logfc.threshold=0))
-deg<-lapply(names(deg),function(x) 
-    deg[[x]]%>%rownames_to_column("pathway")%>%mutate(ct=x))%>%bind_rows()
-
-
-
-pJ<-deg%>%ggplot(aes(y=pathway,x=avg_log2FC))+geom_density_ridges(alpha=0.1)+
-    #geom_jitter(aes(col=celltype,size= adj.P.Val),height = .1,alpha=0.5)+
-    theme_classic()+#scale_color_manual(values=alt_cellcols)+
-    theme(axis.line.y = element_blank(),axis.ticks.y = element_blank())+
-    scale_size(range=c(6,.5))+
-    guides(colour = "none")+geom_vline(xintercept = 0)
-
-
-
-```
 
 # maybe
 ## Markers
@@ -401,3 +366,8 @@ temp%>%filter(harmonized_major_cell_type%in%c("T cells","Myeloid cells")&!Final_
 
 
 
+
+
+## Menstrual cycle
+```{r}
+meta<-meta%>%mutate(cycle=case_when(Run_Tissue_name%in%c("BEME541_Endometriosis-795R3","6480D2-PT7")~"Hormone",Run_Tissue_name%in%c("BEME209-Endometrium","BEME550-Endometrium","6318B1-PT20","BEME518_Endometriosis_1023-A2","BEME523-Endometriosis","1019F1-PT9")~"Follicular",Run_Tissue_name%in%c("BEME228-9152C4-PT14","BEME596-Endometrium","BEME142_1044B1-PT4","BEME005-3042A1-PT11","BEME540-Endometriosis","1194A4-PT5" )~"Luteal"))

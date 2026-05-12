@@ -258,7 +258,7 @@ pD<-gsea_bp%>%filter(Description%in%j&ct=="B-cells")%>%
 cc_res<-readRDS("docs/CellChat_nosubPE_hasLA.rds")
 
 cts<-rownames(cc_res[[1]]@net$LApos$count)
-pE<-netVisual_diffInteraction(cc_res[[1]],
+pE<-netVisual_diffInteraction(cc_res[[1]],color.use = alt_cellcols,
                               measure = "count",
                               targets.use = "B-cells",
                               sources.use = cts[str_detect(cts,"Smo|En|Mes|Ery",negate=T)],
@@ -288,7 +288,7 @@ pF<-deg%>%filter(str_detect(ct,"M1|Ear|Eff|Den|Th17|B")&
   theme(axis.text.x = element_text(angle = 45,vjust = 1,hjust = 1),
         strip.background = element_blank())
 ```
-# CD40 across domains in B cells
+# CD40 in B cells
 ```{r}
 files<-list.files()
 files<-files[str_detect(files,"bg")][-1]#no endometrioma
@@ -326,6 +326,29 @@ pF1<-temp%>%mutate(Run_Tissue_name=str_remove(cell_ID,"c_.+"))%>%
   labs(x="Domain",y="Average CD40")+theme_classic()+
   stat_compare_means(label="p.signif",ref.group = 1)+
   scale_color_manual(values=domcol)+theme(legend.position = "n")
+
+###pF2=spatial plots <---------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ```
 
 # T functions
@@ -354,7 +377,8 @@ i<-c(#"positive regulation of interleukin-6 production",
      "receptor-mediated endocytosis",
      #"regulation of B cell proliferation",
      "response to transforming growth factor beta",
-     "positive regulation of T cell activation")
+     "positive regulation of T cell activation",
+     "oxidative phosphorylation")
 pG<-gsea_bp%>%filter(Description%in%i&str_detect(ct,"Ea|Ef|M1|De"))%>%
     add_count(Description)%>%arrange(n)%>%
     mutate(Description=factor(Description,levels=unique(Description)))%>%
@@ -387,36 +411,66 @@ pG1<-temp%>%drop_na()%>%
   geom_point()+facet_grid(~features.plot)+
   scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b")+
   theme_bw()+theme(strip.background = element_blank())+
-  labs(x="",y="",col="Scaled expression",size="Pct. expressed")
+  labs(x="",y="",col="Scaled expression",size="%")
+
+#pG2=NOS in CosMx(spatial plot)<-----------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ```
 
 # Metabolism
 ```{r}
+library(limma)
+library(scMetabolsim)
+
 sc<-sc.metabolism.Seurat(obj = sc, method = "VISION",
                          imputation = F, ncores = 6, metabolism.type = "KEGG")
 #metabo<-sc@
 metabo%>%write_csv("docs/scMetabolism_res.csv")
-scmetabo<-CreateSeuratObject(counts = t(metabo[aux_table$barcode,]),meta.data = aux_table)
-bulk<-AggregateExpression(
-  scmetabo,
-  assays = "RNA",
-  return.seurat = T,
-  group.by = c("SampleName","nosub","has_LA"))
-bulk<-lapply(unique(scmetabo$nosub), function(x) 
-    subset(bulk,subset =nosub==x ))
-names(bulk)<-unique(scmetabo$nosub)
-deg<-lapply(bulk,function(x) 
-    FindMarkers(x,group.by="has_LA",ident.1="LA+",
-                ident.2="LA-",test.use="LR",logfc.threshold=0))
-deg<-lapply(names(deg),function(x) 
-    deg[[x]]%>%rownames_to_column("pathway")%>%mutate(ct=x))%>%bind_rows()
 
+signatures_KEGG_metab <- system.file("data", "KEGG_metabolism_nc.gmt", 
+                                     package = "scMetabolism")
+signatures_KEGG_metab <- BaseSet::getGMT(signatures_KEGG_metab)
+signatureSize<-signatures_KEGG_metab%>%as.data.frame()%>%count(sets)
+metabo<-metabo[signatureSize$sets,]
+meta<-aux_table%>%split(f = aux_table$nosub)
+metabo<-lapply(meta,function(x) metabo[,x$Cell])
+designM<-lapply(meta,function(x) model.matrix(~0+has_LA,data=x))
+cont<-lapply(designM,function(x) 
+  makeContrasts(has_LATRUE-has_LAFALSE,levels = x))
+fit<-lapply(names(meta),function(x) lmFit(metabo[[x]],designM[[x]]))
+names(fit)<-names(meta)
+fit<-lapply(names(fit),function(x) contrasts.fit(fit[[x]],cont[[x]]))
+fit <- lapply(fit,eBayes,robust=TRUE,trend=sqrt(signatureSize$n))
+names(fit)<-names(meta)
+res<-lapply(fit,topTable,number = 85,coef = 1)
+res<-lapply(names(res),function(x) 
+  res[[x]]%>%rownames_to_column("pathway")%>%mutate(ct=x))%>%bind_rows()
 
-pH<-deg%>%ggplot(aes(y=pathway,x=avg_log2FC))+geom_density_ridges(alpha=0.1)+
-    #geom_jitter(aes(col=celltype,size= adj.P.Val),height = .1,alpha=0.5)+
-    theme_classic()+#scale_color_manual(values=alt_cellcols)+
+i<-res%>%group_by(pathway)%>%summarise(i=sum(logFC))%>%
+  mutate(has_LA=ifelse(i>0,"LA+","LA-"))%>%group_by(has_LA)%>%
+  slice_max(abs(i),n=5)%>%ungroup()%>%arrange(i)
+pH<-res%>%filter(pathway%in%i$pathway)%>%
+  mutate(pathway=factor(pathway,levels=i$pathway))%>%
+  ggplot(aes(y=pathway,x=logFC))+geom_density_ridges(alpha=0.1)+
+    geom_jitter(aes(col=ct,size= adj.P.Val),height = .1,alpha=0.5)+
+    theme_classic()+scale_color_manual(values=alt_cellcols)+
     theme(axis.line.y = element_blank(),axis.ticks.y = element_blank())+
-    scale_size(range=c(6,.5))+
+    scale_size(range=c(5,.5))+
     guides(colour = "none")+geom_vline(xintercept = 0)
 
 
@@ -425,11 +479,19 @@ pH<-deg%>%ggplot(aes(y=pathway,x=avg_log2FC))+geom_density_ridges(alpha=0.1)+
 
 ```{r}
 partA<-plot_grid(pB+theme(legend.position = "bottom",legend.box = "vertical"),
-                 pB1+theme(strip.text.y.left = element_blank()),align = "h",axis = "tb",rel_widths = c(.7,.3))
-partB<-plot_grid(pA+labs(x="")+theme(axis.text.x = element_blank(),axis.ticks.x = element_blank()),NULL,pA1,NULL,nrow=4,rel_heights = c(.25,-.05,.55,.15))
-partC<-plot_grid(plot_grid(NULL,pC1+theme(legend.position = "n"),NULL,ncol=3),NULL,plot_grid(pD+theme(legend.position ="bottom",legend.box = "vertical"),pD1+theme(legend.position ="bottom",legend.box = "vertical"),rel_widths = c(.7,.3),align = "h",axis = "tb"),nrow=3,rel_heights = c(.4,-.05,.6))
-pdf("temp.pdf",width = 15,height = 8)
-plot_grid(plot_grid(partA,partB,partC,ncol=3,rel_widths = c(.3,.1,.2,.4)),plot_grid(pC+scale_y_continuous(position = "right"),pE,pF,ncol=3),plot_grid(pF1,pG,rel_widths = c(.4,.6)),plot_grid(pG1,NULL),nrow=4)
+                 pB1+theme(strip.text.y.left = element_blank()),align = "h",
+                 axis = "tb",rel_widths = c(.7,.3))
+partB<-plot_grid(pA+labs(x="")+theme(axis.text.x = element_blank(),
+                                     axis.ticks.x = element_blank()),
+                 NULL,pA1,NULL,nrow=4,rel_heights = c(.25,-.05,.55,.15))
+partC<-plot_grid(plot_grid(pC1+theme(legend.position = "n"),pD1,
+                           rel_widths = c(.4,.6),align = "h",axis = "tb"),
+                 pD+theme_classic()+
+                 theme(legend.position ="bottom",legend.box = "vertical"),
+                 nrow=2,rel_heights = c(.4,.6))
+pdf("temp.pdf",width = 15,height = 12)
+plot_grid(plot_grid(partA,partB,NULL,partC,ncol=4,rel_widths = c(.3,.1,.2,.4)),
+          plot_grid(pC+scale_y_continuous(position = "right"),pE,pF,ncol=3,rel_widths = c(.4,.4,.3)),plot_grid(pF1,pG,pG1+theme(legend.position = "bottom",legend.box = "vertical"),ncol=3,rel_widths = c(.15,.4,.45)),nrow=3,rel_heights = c(.4,.3,.3))
 dev.off()
 ```
 

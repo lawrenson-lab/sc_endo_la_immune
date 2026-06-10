@@ -113,25 +113,21 @@ pB1<-temp%>%mutate(nosub=factor(nosub,levels=rev(pE$data$cell_type)))%>%
 # B cells
 ```{r}
 bcells<-subset(sc,subset = nosub=="B-cells")
-markers<-readxl::read_excel("science.adj4857_table_s2.xlsx",sheet = 2,skip=1)
-markers<-markers%>%filter(!cluster_name%in%c("B14.PB","B15.MZB1+ASC"))%>%
+markers<-readxl::read_excel("data/science.adj4857_table_s2.xlsx",sheet = 2,skip=1)
+marker_genes<-markers%>%filter(!cluster_name%in%c("B14.PB","B15.MZB1+ASC"))%>%
   group_by(cluster_name)%>%slice_max(avg_log2FC,n = 200)
-markers<-markers%>%split(f = markers$cluster_name)%>%
+marker_genes<-marker_genes%>%split(f = marker_genes$cluster_name)%>%
   lapply(function(x) x$geneSymbol)
-bcells<-AddModuleScore(bcells,features = markers,nbin = 10)
+#B03.HSP+B, B05.EGR+ACB, B06.NR4A2+ACB, B08.ITGB1+SwBm, B09.DUSP4+AtM, B10.ENO1+PreGC, B11.SUGCT+DZ GCB, B13.Cycling GCB
+bcells<-AddModuleScore(bcells,features = marker_genes,nbin = 10)
 colnames(bcells@meta.data)[(ncol(bcells@meta.data)-
-                              length(markers)+1):ncol(bcells@meta.data)]<-
-  names(markers)
+                              length(marker_genes)+1):ncol(bcells@meta.data)]<-
+  names(marker_genes)
 
-pC<-bcells@meta.data%>%select(has_LA,names(markers))%>%
+pC<-bcells@meta.data%>%select(has_LA,names(marker_genes))%>%
   pivot_longer(-1,names_to = "subtype",values_to = "score")%>%
-  ggplot(aes(x=subtype,y=score,fill=has_LA))+geom_split_violin()+
-  geom_text_repel(data=pC$data%>%group_by(has_LA,subtype)%>%
-                    summarise(score=median(score))%>%filter(has_LA=="LA+"),
-                  aes(x=subtype,y=score,label="•"),nudge_x = .01,direction = "x")+
-  geom_text_repel(data=pC$data%>%group_by(has_LA,subtype)%>%
-                    summarise(score=median(score))%>%filter(has_LA=="LA-"),
-                  aes(x=subtype,y=score,label="•"),nudge_x = -.01,direction = "x")+
+  ggplot(aes(x=subtype,y=score,fill=has_LA))+
+  geom_split_violin(draw_quantiles = .5,width=1)+
   scale_fill_manual(values=lacols)+theme_classic()+
   theme(axis.text.x = element_text(angle=90,vjust = 1,hjust = 1))
 res<-bcells@meta.data%>%select(has_LA,names(markers))%>%
@@ -139,21 +135,39 @@ res<-bcells@meta.data%>%select(has_LA,names(markers))%>%
   group_by(subtype)%>%wilcox_test(score~has_LA)
 res$padj<-p.adjust(res$p)
 
-markers<-readxl::read_excel("science.adj4857_table_s2.xlsx",sheet = 5,skip=1)
-markers<-markers%>%group_by(Group)%>%slice_max(LogFC,n = 500)
-markers<-markers%>%split(f = markers$Group)%>%
-  lapply(function(x) x$Gene)
-bcells<-AddModuleScore(bcells,features = markers,nbin = 10)
-colnames(bcells@meta.data)[(ncol(bcells@meta.data)-
-                              length(markers)+1):ncol(bcells@meta.data)]<-
-  names(markers)
-pC1<-bcells@meta.data%>%select(has_LA,names(markers))%>%
-    pivot_longer(-1,names_to = "subtype",values_to = "score")%>%
-  ggplot(aes(x=has_LA,y=score,fill=has_LA))+geom_violin()+
-  geom_boxplot(width=.1)+facet_wrap(~subtype,scales="free")+
-  stat_compare_means(label="p.signif",comparisons = list(c("LA+","LA-")))+
-  theme_classic()+theme(strip.background = element_blank())+
-  scale_fill_manual(values = lacols)+labs(x="")
+#markers<-readxl::read_excel("science.adj4857_table_s2.xlsx",sheet = 5,skip=1)
+#markers<-markers%>%group_by(Group)%>%slice_max(LogFC,n = 500)
+#markers<-markers%>%split(f = markers$Group)%>%
+#  lapply(function(x) x$Gene)
+#bcells<-AddModuleScore(bcells,features = markers,nbin = 10)
+#colnames(bcells@meta.data)[(ncol(bcells@meta.data)-
+#                              length(markers)+1):ncol(bcells@meta.data)]<-
+#  names(markers)
+#pC1<-bcells@meta.data%>%select(has_LA,names(markers))%>%
+#    pivot_longer(-1,names_to = "subtype",values_to = "score")%>%
+#  ggplot(aes(x=has_LA,y=score,fill=has_LA))+geom_violin()+
+#  geom_boxplot(width=.1)+facet_wrap(~subtype,scales="free")+
+#  stat_compare_means(label="p.signif",comparisons = list(c("LA+","LA-")))+
+#  theme_classic()+theme(strip.background = element_blank())+
+#  scale_fill_manual(values = lacols)+labs(x="")
+
+marker_genes<-markers%>%filter(cluster_name%in%c("B03.HSP+B","B05.EGR+ACB",
+                                                 "B06.NR4A2+ACB","B10.ENO1+PreGC",
+                                                 "B11.SUGCT+DZ GCB","B13.Cycling GCB"))%>%
+    group_by(cluster_name)%>%slice_max(avg_log2FC,n = 3)
+marker_genes<-marker_genes%>%
+  split(f = marker_genes$cluster_name)%>%
+  lapply(function(x) x$geneSymbol)
+pC1<-DotPlot(sc,group.by = "has_LA",features = marker_genes)
+pC1<-pC1$data%>%
+  ggplot(aes(x=id,y=features.plot,col=avg.exp.scaled,size=pct.exp))+
+  geom_point()+facet_wrap(~feature.groups,scales="free",
+                          nrow=length(marker_genes),strip.position="right")+
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  theme_bw()+theme(strip.background = element_blank(),
+                   strip.text.y = element_text(angle=0,hjust = 0),
+                   panel.grid = element_blank())+
+  labs(x="",y="",col="Scaled",size="%")
 ```
 
 # Differential expression
@@ -330,21 +344,27 @@ pF1<-temp%>%mutate(Run_Tissue_name=str_remove(cell_ID,"c_.+"))%>%
 ###pF2=spatial plots <---------------------------------------------------------------------
 
 
+metadata<-metadata%>%filter(Class=="Peritoneal endometriosis")
+i<-metadata%>%filter(dom_nEndoh1_75==6)%>%distinct(Run_Tissue_name)%>%unlist()
+metadata<-metadata%>%filter(Run_Tissue_name%in%i)
+nobatch<-nobatch[,metadata$cell_ID]
+temp<-metadata%>%filter(fov_type=="B cells")%>%
+  select(Run_Tissue_name,cell_ID,fov)
+temp<-nobatch%>%t()%>%as.data.frame()%>%
+  rownames_to_column("cell_ID")%>%inner_join(temp)
+i<-temp%>%filter(CD40>mean(CD40))%>%count(Run_Tissue_name,fov)%>%
+  group_by(Run_Tissue_name)%>%slice_max(n,n=3)%>%select(-n)
+temp<-metadata%>%inner_join(i)
+temp<-nobatch%>%t()%>%as_data_frame()%>%
+  rownames_to_column("cell_ID")%>%right_join(temp)
+temp1<-t(nobatch[,temp$cell_ID])
+temp1<-temp1%>%as.data.frame()%>%rownames_to_column("cell_ID")
+temp1<-temp%>%left_join(temp1)
+temp1%>%ggplot(aes(x=x_slide_mm,y=y_slide_mm,col=fov_type,fill=CD40,size=Area.um2))+geom_point(shape=21,stroke=1)+scale_color_manual(values=cellcols)+scale_fill_viridis_c(option = 'H')+facet_wrap(~Run_Tissue_name+fov,scales="free")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+i<-metadata%>%filter(dom_nEndoh1_75==6&fov_type=="B cells")
+temp<-nobatch[,i$cell_ID]
+temp<-temp%>%t()%>%as.data.frame()%>%rownames_to_column("cell_ID")%>%right_join(i)
 
 
 
@@ -415,6 +435,40 @@ pG1<-temp%>%drop_na()%>%
 
 #pG2=NOS in CosMx(spatial plot)<-----------------------------------------------------------
 
+files<-list.files()
+files<-files[str_detect(files,"bg")][-1]#no endometrioma
+metadata<-lapply(files,vroom::vroom)%>%bind_rows()
+gc()
+metadata<-metadata%>%filter(fov_type=="CD8 T cells")
+mat<-vroom::vroom("endometrium.csv")%>%filter(cell_ID%in%metadata$cell_ID)
+mat<-vroom::vroom("PE.csv")%>%filter(cell_ID%in%metadata$cell_ID)%>%bind_rows(mat)
+gc()    
+
+mat<-mat%>%column_to_rownames("cell_ID")%>%t()
+negavg<-colMeans(mat[c("Ms IgG1","Rb IgG"),])
+normi<-t(t(mat)-negavg)
+normi<-asinh(normi/5)
+nobatch<-sva::ComBat(dat = normi,batch = str_remove(colnames(normi),"c_1.+"),
+                     BPPARAM = BiocParallel::MulticoreParam(workers = 2))
+
+#PD-1 is elevated in index 2
+temp<-metadata%>%select(cell_ID,dom_nEndoh1_75,Class,fov_type)
+temp<-nobatch%>%t()%>%as.data.frame()%>%
+  rownames_to_column("cell_ID")%>%select(cell_ID,iNOS)%>%
+  inner_join(temp)
+temp<-temp%>%mutate(index=case_when(dom_nEndoh1_75==6~1,
+                                    dom_nEndoh1_75==3~2,
+                                    dom_nEndoh1_75==4~3,
+                                    dom_nEndoh1_75==2~4,
+                                    dom_nEndoh1_75==1~6,
+                                    TRUE~dom_nEndoh1_75))#as defined in Fig2
+pG2<-temp%>%mutate(Run_Tissue_name=str_remove(cell_ID,"c_.+"))%>%
+  group_by(Run_Tissue_name,index)%>%summarise(iNOS=mean(iNOS))%>%
+  ggplot(aes(x=as.factor(index),y=iNOS,col=as.factor(index)))+
+  geom_violin()+geom_jitter(width = .1)+
+  labs(x="Domain",y="Average iNOS")+theme_classic()+
+  stat_compare_means(label="p.signif",ref.group = 1)+
+  scale_color_manual(values=domcol)+theme(legend.position = "n")
 
 
 

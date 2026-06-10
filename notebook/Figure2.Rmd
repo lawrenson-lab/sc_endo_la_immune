@@ -11,6 +11,7 @@ library(ggrepel)
 library(speckle)
 library(limma)
 library(ggridges)
+library(dbscan)
 
 domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")
 names(domcol)<-6:1
@@ -317,12 +318,82 @@ pdf("temp.pdf",width = 13,height = 9)
  plot_grid(partA,plot_grid(pD1,partB,rel_widths = c(.4,.6)),nrow = 2,rel_heights = c(.3,.7))
 dev.off()
 ```
-
-
-
-
-
-
-## Menstrual cycle
+# Blob size
 ```{r}
-meta<-meta%>%mutate(cycle=case_when(Run_Tissue_name%in%c("BEME541_Endometriosis-795R3","6480D2-PT7")~"Hormone",Run_Tissue_name%in%c("BEME209-Endometrium","BEME550-Endometrium","6318B1-PT20","BEME518_Endometriosis_1023-A2","BEME523-Endometriosis","1019F1-PT9")~"Follicular",Run_Tissue_name%in%c("BEME228-9152C4-PT14","BEME596-Endometrium","BEME142_1044B1-PT4","BEME005-3042A1-PT11","BEME540-Endometriosis","1194A4-PT5" )~"Luteal"))
+metadata<-metadata%>%filter(dom_nEndoh1_75==6)
+
+samples<-unique(metadata$Run_Tissue_name)
+#per sample
+#eye selected, how to automatize??????
+#samples<-c("6318B1-PT20"=7,"BEME005-3042A1-PT11"=9,"BEME209-Endometrium"=25,#15,
+#           "BEME228-9152C4-PT14"=21,"BEME518_Endometriosis_1023-A2"=17,"BEME523-Endometriosis"=12,
+#           "BEME541_Endometriosis-795R3"=11,"BEME550-Endometrium"=1,"BEME596-Endometrium"=46)
+dom6<-metadata%>%split(by="Run_Tissue_name")
+eps<-c(.05,.03,.018,.018,.1,.045,.0135,.05,.021)#overfitted 
+names(eps)<-samples
+dbcl <- lapply(names(dom6),function(x)
+    dbscan(dom6[[x]]%>%select(x_slide_mm,y_slide_mm), eps = eps[x]))
+names(dbcl)<-names(dom6)
+blobs<-lapply(names(dom6), function(x)
+  dom6[[x]]%>%select(Run_Tissue_name,cell_ID,x_slide_mm,y_slide_mm,
+                     Class,Area.um2,fov_type,dom_nEndoh1_75)%>%
+    mutate(dbcl=dbcl[[x]]$cluster))%>%bind_rows()
+#blobs%>%ggplot(aes(x=x_slide_mm,y=y_slide_mm,col=as.factor(dbcl)))+
+#  geom_point(size=1)+
+#  facet_wrap(~Run_Tissue_name,scales="free")+
+#  guides(col = guide_legend(override.aes = list(size = 5)))
+blobs<-blobs%>%mutate(Class=str_replace(Class,".+ e","E"))%>%
+              mutate(Class=factor(Class,levels=c("Endometrium","Endometriosis")))
+pG<-blobs%>%count(Class,Run_Tissue_name,dbcl,name="Size")%>%
+    ggplot(aes(x=Size,y=Class,fill=Class))+
+    geom_density_ridges()+theme_classic()+
+    scale_fill_manual(values=classcols)+
+    theme(axis.line.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          legend.position = "n")
+```
+
+## blob composition
+```{r}
+#temp<-blobs%>%filter(str_detect(fov_type,"B|CD|Mye|Plas|NK"))%>%
+#  count(Class,Run_Tissue_name,dbcl,fov_type,name="cells")%>%
+#  group_by(Class,Run_Tissue_name,dbcl)%>%
+#  mutate(total=sum(cells),prop=100*cells/total)%>%
+#  ungroup()
+
+#pH1<-temp%>%count(Class,fov_type)%>%
+#  left_join(temp%>%distinct(Class,Run_Tissue_name,dbcl)%>%
+#              count(Class,name = "total"))%>%mutate(prop=100*n/total)%>%
+#  ggplot(aes(x=Class,y=prop,fill=fov_type))+geom_col()+facet_grid(~fov_type)+
+#    theme_classic()+theme(axis.text.x = element_blank(),
+#                                strip.background = element_blank(),
+#                                plot.margin=grid::unit(c(0,0,-4,0), "mm"))+
+#    labs(x="",y="% of instances")+
+#  scale_fill_manual(values=cellcols)+theme(legend.position = "none")
+#
+#pH2<-temp%>%ggplot(aes(x=Class,y=prop,col=fov_type,group=Class))+
+#    geom_violin()+
+#    geom_jitter(aes(size=total),width = .1,alpha=0.5)+
+#  scale_color_manual(values=cellcols)+
+#    stat_compare_means(method = "wilcox.test",label="p.signif",
+#                       hide.ns = T,comparisons = list(c("Endometrium","Endometriosis")))+
+#  facet_grid(~fov_type)+theme_classic()+
+#  theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
+#        strip.background = element_blank(),strip.text.x = element_blank())+
+#    labs(x="",y="% per instance",size="Size")+
+#    scale_color_manual(values=cellcols)+guides(col="none")
+#partB<-plot_grid(pB0,pB1,nrow=2,align = "v",axis = "lr",rel_heights = c(.3,.7))
+#partA<-plot_grid(plot_grid(pA0,NULL,nrow=2,rel_heights = c(.75,.25)),partB,rel_widths = c(.25,.75))
+
+temp<-temp%>%ungroup()%>%mutate(box=cut(total,breaks = 10))
+formula <- y ~ x    
+pG1<-ggplot(temp, aes(x= total, y= prop, group=fov_type,color = fov_type)) +
+    geom_smooth(method = "loess", formula = formula, se = F,)+
+  scale_color_manual(values=cellcols)+labs(x="Size",y='%',colour="Cell type")+
+  scale_y_continuous(limit=c(0,NA))+theme_classic()+
+  facet_wrap(~Class,nrow=2,scales = "free")+scale_x_sqrt()+
+  theme(legend.position="none",strip.background = element_blank())
+
+```
+
+

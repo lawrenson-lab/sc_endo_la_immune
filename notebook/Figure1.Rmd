@@ -649,15 +649,15 @@ wilcox.test(total_lymph_agg ~ Category, data = LA.summarised)
 
 #ggplot(LA.summarised, aes(x=plotting_id, y=total_lymph_agg, color=Category)) + 
   #scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
-  #                                                  "Endometriosis" = "#d9f0d3")) + 
+                                                   "Endometriosis" = "#d9f0d3")) + 
   #geom_quasirandom(size=2.5) + 
   #scales= "free_x" means that it can ignore any point that is not in that category
   #facet_wrap(~Category, scales = "free_x") + 
-  # geom_text(x=1, y=15, label="p-value = 0.0422", colour="black", family = "san", fontface = "plain", size =5) +
+   #geom_text(x=1, y=15, label="p-value = 0.0422", colour="black", family = "san", fontface = "plain", size =5) +
   #ggtitle("Number of LA in each Endometrioma and Endometriosis part") + 
   #theme_classic(base_size = 20) +
   #theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
-  #geom_hline(yintercept = 0, linetype = 2) +
+  #geom_hline(yintercept = 0, linetype = 2) #+
   #scale_x_discrete(labels = setNames(LA.summarised$`PAPER ID`, LA.summarised$plotting_id))
   
   
@@ -674,6 +674,25 @@ ggplot(LA.summarised, aes(x=plotting_id, y=total_lymph_agg)) +
   scale_x_discrete(labels = setNames(LA.summarised$`PAPER ID`, LA.summarised$plotting_id))
   
 
+
+#Beeswarm plot of total La by patient
+
+LA.summarised <- LA.simple.data %>%
+  select(`PAPER ID`, Number_of_lymphoid_aggregates, Category) %>% 
+  group_by(`PAPER ID`, Category) %>% 
+  summarise(total_lymph_agg = sum(Number_of_lymphoid_aggregates)) %>% 
+  mutate(plotting_id = paste0(`PAPER ID`, Category))
+
+LA.summarised$plotting_id <- factor(LA.summarised$plotting_id, levels = LA.summarised$plotting_id[order(LA.summarised$total_lymph_agg)])
+
+wilcox.test(total_lymph_agg ~ Category, data = LA.summarised)
+
+ggplot(LA.summarised, aes(x=Category, y=total_lymph_agg)) + 
+     geom_quasirandom(size=2.5) + 
+     geom_text(x=1, y=60, label="p-value = 0.001217", colour="black", family = "san", fontface = "plain", size =5) +
+     ggtitle("Number of LA in each Endometrioma and Endometriosis in patient") + 
+     theme_classic(base_size = 20) +
+     geom_hline(yintercept = 0, linetype = 2) 
 
 ```
 

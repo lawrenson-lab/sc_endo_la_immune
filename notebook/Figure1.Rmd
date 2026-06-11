@@ -287,21 +287,20 @@ pG<-temp%>%filter(ct!="Erythrocytes")%>%
     labs(y="",x="Total interaction")
 
 cts<-unique(temp$ct)
-temp<-cc_res[[1]]@net$`Peritoneal endometriosis`$count
-temp<-temp-cc_res[[1]]@net$`Eutopic endometrium`$count
 #netVisual_diffInteraction() not working
-pH<-mynetVisual_circle(temp,targets.use = "Mesothelial cells",
-                   remove.isolate = T,edge.curved = F,
-                   weight.scale = T,
-                   sources.use = cts[str_detect(cts,"Ery",negate = T)])
+pH<-netVisual_diffInteraction(cc_res[[1]],
+                              comparison = c(1,2),
+                              targets.use = "B-cells",
+                              weight.scale = T,
+                              remove.isolate = T,
+                              sources.use=cts[cts!="Erythrocytes"])
 
-temp<-cc_res[[1]]@net$`Peritoneal endometriosis`$count
-temp<-temp-cc_res[[1]]@net$`Eutopic endometrium`$count
-#netVisual_diffInteraction() not working
-pH1<-mynetVisual_circle(temp,targets.use = "Plasmablast/Plasma cells",
-                   remove.isolate = T,edge.curved = F,
-                   weight.scale = T,
-                   sources.use = cts[str_detect(cts,"Ery",negate = T)])
+pH1<-netVisual_diffInteraction(cc_res[[1]],
+                              comparison = c(1,2),
+                              sources.use = "B-cells",
+                              weight.scale = T,
+                              remove.isolate = T,
+                              targets.use=cts[cts!="Erythrocytes"])
 
 ```
 # CosMx neighbors
@@ -337,10 +336,12 @@ plot_grid(hm,p0,align = "h",axis = "tb")
 
 #partA<-plot_grid(pC+theme(axis.text = element_text(size=10),legend.position = "left",plot.margin=grid::unit(c(1,10,0,-3), "mm")),pC1+theme(axis.text = element_text(size=10),plot.margin=grid::unit(c(0,0,0,-15), "mm")),align="h",axis="tb",rel_widths = c(.8,.2),labels=c('B',''))
 #partB<-plot_grid(pE+theme(axis.text = element_text(size=10)),pE1+theme(axis.text = element_text(size=10)),align="h",axis="tb",labels=c('C','D'))
-#partA<-plot_grid(NULL,plot_grid(partA,partB,nrow = 2,rel_heights = c(.4,.6)),rel_widths = c(.55,.45))
-#partB<-plot_grid(pF+theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1)),pF1+theme(legend.position = "n"),NULL,ncol=3,rel_widths = c(.25,.25,.5),labels = c('E','F','G'))
-pdf("temp.pdf",width = 14,height = 8)
-plot_grid(partA,partB,nrow=2)
+#partA<-plot_grid(partA,partB,nrow = 2,rel_heights = c(.4,.6))
+#partB<-plot_grid(pF1,pF2,nrow=2,align='v',axis="lr",rel_heights = c(.35,.65))
+#partC<-plot_grid(pF,pG+theme(axis.text.y = element_blank(),axis.ticks.y =element_blank(),plot.margin=grid::unit(c(0,0,0,-10), "mm")),rel_widths = c(.7,.3),align = "h",axis = "tb")
+#partC<-plot_grid(partC,NULL,nrow=2,rel_heights = c(.6,.4))
+pdf("temp.pdf",width = 13,height = 11)
+plot_grid(plot_grid(NULL,partA),plot_grid(partB,partC,rel_widths = c(.6,.4)),nrow=2)
 dev.off()
 
 save(hm0,p1,lgd0,pB,pB1,pC,pC1,pE,pH1,pI,

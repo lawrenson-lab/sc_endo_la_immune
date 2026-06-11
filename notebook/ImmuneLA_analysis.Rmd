@@ -138,7 +138,7 @@ Immune.cells.subclustering@meta.data <- droplevels(Immune.cells.subclustering@me
 
 Immune.cells.subclustering@meta.data %>% 
       group_by(seurat_clusters %>% as.character()) %>% 
-     summarise(n_tissue=n_distinct(orig.ident), n_patient= n_distinct(Patient.No.), n=n()) %>%
+     summarise(total_lymph_agg=n_distinct(orig.ident), n=n()) %>%
       print(n=92)
 ```
 

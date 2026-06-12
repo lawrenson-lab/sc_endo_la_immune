@@ -349,3 +349,513 @@ save(hm0,p1,lgd0,pB,pB1,pC,pC1,pE,pH1,pI,
 
 ```
 
+<<<<<<< HEAD
+
+
+
+
+
+
+
+
+
+
+
+#Stattistics for LA High vs Low
+```{r}
+##stage comparision in Low vs High (not including patient 1 and 2 that have only endometrioma)
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 1)
+counts = table(Metadata.Stats$Group[-c(1:2)], Metadata.Stats$Stage.Group[-c(1:2)])
+Chisq <- chisq.test(counts)
+Chisq
+
+##Low vs High mestral cycle comparision pch = circles, 21= is the type symbol (21 =circle)
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 1)
+counts = table(Metadata.Stats$Group[-c(1:2)], Metadata.Stats$Menstral.Cycle.Phase[-c(1:2)])
+Chisq <- chisq.test(counts)
+Chisq
+
+
+##Low vs High Age comparision 
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 1)
+Metadata.Stats = Metadata.Stats[-c(1:2), c("Group", "Age")]
+
+Low <- c(32, 41, 31)
+High <- c(32, 24, 40, 42, 28, 21, 37, 46, 36)
+
+wilcox.test(Low, High)
+
+p1 <- ggplot(Metadata.Stats, aes(x=as.character(Group), y=Age)) +
+  geom_boxplot(width = 0.5) + 
+  geom_point(pch = 21) +
+  theme_classic(base_size = 20) +
+  theme(axis.text.x=element_text(angle = -45, vjust = 0.5, colour = "black"), axis.text.y = element_text(colour = "black")) +
+  geom_text(x=0.75, y=45, label= "p-value = 1", size = 10)
+  
+p1
+
+
+##Low vs High Deep vs superficial comparision by tissue
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 2)
+counts = table(Metadata.Stats$Group, Metadata.Stats$Deep_superficial)
+Chisq <- chisq.test(counts)
+Chisq
+
+
+
+##Low vs High mutations status comparision by tissue
+Metadata.Stats = read_xlsx("data/LA_Supp_organization.xlsx", sheet = 2)
+counts = table(Metadata.Stats$Group[-c(3, 12, 16, 18, 20:22, 28)], Metadata.Stats$ARID1A_Mut[-c(3, 12, 16, 18, 20:22, 28)])
+Chisq <- chisq.test(counts)
+Chisq
+
+
+counts = table(Metadata.Stats$Group[-c(3:4, 6:8, 11:14, 16, 18:23, 28)], Metadata.Stats$KRAS_Mut[-c(3:4, 6:8, 11:14, 16, 18:23, 28)])
+Chisq <- chisq.test(counts)
+Chisq
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+#looking at specific receptors and ligans in EnEpi and Central Memory in endometriosis
+```{r}
+sel <- subset(d10x.seurat, subset = Master_Assigned_Cell_Type %in% "EnS cells")
+
+sel <- subset(sel, subset = Class %in% c("Peritoneal endometriosis", "Endometrioma"))
+
+Immune.markers = read.delim("data/cell_chat_receptor_ligand_filtered.csv", sep = ",")
+head(Immune.markers)
+
+selected.features = unique(as.character(unique(Immune.markers$M2Macs)))
+
+
+DotPlot(sel, assay = "RNA", features = c("IGF1", "THY1", "ANXA1", "C3", "IGF"), group.by = "Class") + labs(title = "Ligand Receptor in CLASS EnS cells") +
+ theme_classic(base_size = 25) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour="black"), axis.text.y = element_text(color = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+sel <- subset(Endometriosis, subset = Immune_Cluster_ID %in% "Plasma cells")
+
+sel <- subset(Immune.Cells.TrueV2, subset = Class %in% c("Peritoneal endometriosis", "Endometrioma"))
+
+sel <- subset(sel, subset = Immune_Cluster_ID %in% "Plasma cells")
+
+DotPlot(sel, assay = "RNA", features = c("IL1B", "NAMPT", "CD69", "GZMA", "HLA-B", "APP", "CLEC2B", "INSR"), group.by = "Class") + labs(title = "Ligand Recipient signals from Activated Plasma cell") +
+ theme_classic(base_size = 25) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8, colour="black"), axis.text.y = element_text(colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+
+
+Endometriosis <- subset(Immune.Cells.TrueV2, subset = Class %in% "Peritoneal endometriosis")
+
+Idents(sel) <- "Immune_Cluster_ID"
+
+DotPlot(sel, assay = "RNA", features = 
+          c("NAMPT", "CD69", "GZMA", "HLA-B", "APP", "CLEC2B"), split.by = "Class", cols= "BrBG") + labs(title = "COX expression in Immune cells in endometriosis") +
+ theme_classic(base_size = 20) #+
+  #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.8)) +
+  #coord_flip() +
+  #scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##Figure1A will be an HE of LA high with big aggregate and a small aggregate
+
+
+
+
+
+## Fig 1B Beeswarm plot of the #LA in endometrioma and endometriosis.
+
+```{r}
+#endometrioma vs Endometriosis LA by block
+LA.extended.data = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 4)
+
+#endometrioma vs Endometriosis LA by blocks stats
+Endometrioma <- c(0,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,1,0,0,0,0,0,0,0)
+Endometriossis<- c(0,0,0,0,2,0,0,2,3,0,4,8,10,7,7,9,0,0,1,1,11,0,5,0,0,0,0,0,0,0,0,2,2,3,4,0,0,1,5,0,13,1,3,4,0,2,0,1,5,2,1,1,0,1,1,1,1,1,0,1,1,0,0,1,3,0,0,0,0,0,0,0,0) 
+
+t_test <- t.test(Endometrioma, Endometriossis)
+t_test
+
+p1 <- ggplot(LA.extended.data, aes(x=Category, y=Number_of_lymphoid_aggregates, color= Category)) + 
+  scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+                                                    "Endometriosis" = "#d9f0d3")) + 
+  geom_beeswarm(size=3, shape =21, fill= "black", stroke =1.75) + 
+  geom_text(x=1, y=12, label=paste0("p-value = ", t_test$p.value), colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in each Endometrioma and Endometriosis Block") + 
+  theme_classic(base_size = 20)
+
+p1
+
+
+#endometrioma vs Endometriosis LA by part
+LA.simple.data = read_xlsx("data/2024-11-06_Combine_scGroup_withPriority2_analyze_only_endometriosis_positive_parts_deidentified_Rfile.xlsx", sheet = 5)
+LA.simple.data <- LA.simple.data %>% filter(!grepl("No ", Category))
+#endometrioma vs Endometriosis LA by part stats
+#Endometrioma <- c(6,0,0,0,0,0,0,0,6,0,0,8,3,0,0,0,0,0,0,0,0,0,0,0,0,0,5)
+#Endometriossis<- c(8,0,0,0,0,0,4,0,3,0,12,17,16,0,0,16,2,0,0,0,0,0,0,1,0,0,0,0,4,7,0,0,1,5,0,14,3,4,10,3,4,2,4,0,0,0,0,0,0,3,0,1,17,0,0,0,10,0,1,0,0,0,0,0,0,0,0,0,0,9,0,0,0,29,13,4,1,6,5,7,4,0,0,2,1,0,0,15,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,6,8,0,0,0,5,0,1,0,3,0,7,1,0,35,1,12,26,20,7,0,3,0,4,0,0,0,13,2,0,0,0,0,7,0,1,6,0,0,0,0,0,0,0,0,28,2,8,3,0,0,0,0) 
+#wil_test <- wilcox.test(Number_of_lymphoid_aggregates ~ Category, data = LA.simple.data)
+#wil_test <- wilcox.test(Endometrioma, Endometriossis)
+#wil_test
+
+wilcox.test(Number_of_lymphoid_aggregates ~ Category, data = LA.simple.data)
+
+#p1 <- ggplot(LA.simple.data, aes(x=Category, y=Number_of_lymphoid_aggregates, color=Category)) + 
+  #scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+   #                                                 "Endometriosis" = "#d9f0d3")) + 
+  #geom_quasirandom(size=2.5) + 
+  #geom_text(x=0.75, y=30, label="p-value = 0.2499", colour="black", family = "san", fontface = "plain", size =5) +
+  #ggtitle("Number of LA in each Endometrioma and Endometriosis part") + 
+  #theme_classic(base_size = 20)
+
+p1 <- ggplot(LA.simple.data, aes(x=Category, y=Number_of_lymphoid_aggregates)) + 
+  geom_quasirandom(size=2.5) + 
+  geom_text(x=0.75, y=30, label="p-value = 0.2499", colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in each Endometrioma and Endometriosis part") + 
+  theme_classic(base_size = 20)
+
+
+p1
+
+
+#Number of LA in Endometrioma and Endometriosis by part with patients labeled
+LA.summarised <- LA.simple.data %>%
+  select(`PAPER ID`, Number_of_lymphoid_aggregates, Category) %>% 
+  group_by(`PAPER ID`, Category) %>% 
+  summarise(total_lymph_agg = sum(Number_of_lymphoid_aggregates)) %>% 
+  mutate(plotting_id = paste0(`PAPER ID`, Category))
+
+LA.summarised$plotting_id <- factor(LA.summarised$plotting_id, levels = LA.summarised$plotting_id[order(LA.summarised$total_lymph_agg)])
+
+wilcox.test(total_lymph_agg ~ Category, data = LA.summarised)
+
+#ggplot(LA.summarised, aes(x=plotting_id, y=total_lymph_agg, color=Category)) + 
+  #scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+                                                   "Endometriosis" = "#d9f0d3")) + 
+  #geom_quasirandom(size=2.5) + 
+  #scales= "free_x" means that it can ignore any point that is not in that category
+  #facet_wrap(~Category, scales = "free_x") + 
+   #geom_text(x=1, y=15, label="p-value = 0.0422", colour="black", family = "san", fontface = "plain", size =5) +
+  #ggtitle("Number of LA in each Endometrioma and Endometriosis part") + 
+  #theme_classic(base_size = 20) +
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
+  #geom_hline(yintercept = 0, linetype = 2) #+
+  #scale_x_discrete(labels = setNames(LA.summarised$`PAPER ID`, LA.summarised$plotting_id))
+  
+  
+
+ggplot(LA.summarised, aes(x=plotting_id, y=total_lymph_agg)) + 
+  geom_quasirandom(size=2.5) + 
+  #scales= "free_x" means that it can ignore any point that is not in that category
+  facet_wrap(~Category, scales = "free_x") + 
+  #geom_text(x=1, y=15, label="p-value = 0.001217", colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in each Endometrioma and Endometriosis in each patient") + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  scale_x_discrete(labels = setNames(LA.summarised$`PAPER ID`, LA.summarised$plotting_id))
+  
+
+
+#Beeswarm plot of total La by patient
+
+LA.summarised <- LA.simple.data %>%
+  select(`PAPER ID`, Number_of_lymphoid_aggregates, Category) %>% 
+  group_by(`PAPER ID`, Category) %>% 
+  summarise(total_lymph_agg = sum(Number_of_lymphoid_aggregates)) %>% 
+  mutate(plotting_id = paste0(`PAPER ID`, Category))
+
+LA.summarised$plotting_id <- factor(LA.summarised$plotting_id, levels = LA.summarised$plotting_id[order(LA.summarised$total_lymph_agg)])
+
+wilcox.test(total_lymph_agg ~ Category, data = LA.summarised)
+
+ggplot(LA.summarised, aes(x=Category, y=total_lymph_agg)) + 
+     geom_quasirandom(size=2.5) + 
+     geom_text(x=1, y=60, label="p-value = 0.001217", colour="black", family = "san", fontface = "plain", size =5) +
+     ggtitle("Number of LA in each Endometrioma and Endometriosis in patient") + 
+     theme_classic(base_size = 20) +
+     geom_hline(yintercept = 0, linetype = 2) 
+
+```
+
+## Fig 1C
+```{r}
+#Heatmap of peritoneal endometriosis lesions in parts
+library(pheatmap)
+
+la_summary = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 2)
+la_summary[is.na(la_summary)] = -10
+
+my_cluster_col = as.data.frame(la_summary[3])
+my_cluster_col$Patient = as.character(my_cluster_col$Patient)
+rownames(my_cluster_col) <- paste0("row_", seq(nrow(my_cluster_col)))
+la_summary = la_summary[c(-8, -14:-41),c(-1:-3, -11:-31)]  #need to adjust rows depending on the samples being included.
+
+test_labels <- as.matrix(la_summary)
+rownames(la_summary) <- paste0("row_", seq(nrow(la_summary)))
+test_labels[test_labels < 0] <- "\u2217\u2217"
+test_labels[test_labels < 0] <- "\uFF0A"
+
+p1 <- pheatmap(la_summary,
+         cluster_cols = F,
+         display_numbers = test_labels,
+         fontsize_number=12,
+         cellheight=20,
+         annotation_row = my_cluster_col,
+         clustering_distance_row = "euclidean",
+         main = "12 samples euclidean")
+
+p1
+
+
+#or plot based on Beeswarm plot
+LA.simple.data = read_xlsx("data/2023-01-25 LA Summary MH v2.xlsx", sheet = 5)
+LA.simple.data.sel = LA.simple.data[c(-1,-2,-3, -5, -10, -23, -33, -36, -47), c("LA_Activity", "Category", "Number_of_lymphoid_aggregates")]
+
+p1 <- ggplot(LA.simple.data.sel, aes(x=LA_Activity, y=Number_of_lymphoid_aggregates, color=LA_Activity)) + 
+  #scale_colour_manual(name="Category", values = c("Endometrioma" = "#7b3294", 
+   #                                                 "Endometriosis" = "#d9f0d3")) + 
+  geom_beeswarm(size=2.5) + 
+  #geom_text(x=1, y=15, label="p-value = 0.4654", colour="black", family = "san", fontface = "plain", size =5) +
+  ggtitle("Number of LA in patients defined as High and low by part") + 
+  theme_classic(base_size = 30)
+  
+
+p1
+
+```
+
+
+
+
+
+
+## Fig 1F
+PCA based on the following cell proportion for each samples:
+
+Follow the below steps for PCA analysis 
+
+1. import Annotation tracker to add the LA_Status Epi_data tab - we need that col to label ggplot ( Master_Assigned_Cell_Type is already included in mate.data)
+2. import `broom`package to parse PCA output from `prcomp`
+3. Only meta.data from Seurat obj is needed for the PCA analysis
+4. If the label on plot is too crowded. consider using `Patient.No.`
+
+```{r}
+d10x.seurat <- readRDS("data/fixed_annotated_aux.seurat.rds")@meta.data
+excel_path <- "data/Annotation tracker.xlsx"
+sheets <- readxl::excel_sheets(excel_path)
+Annotation_tracker <- sheets %>% 
+                      lapply(. , function(s){ read_excel(excel_path, sheet = s) %>% 
+                                              mutate(across(where(is.character),str_trim))
+                                              }) %>%
+                      setNames(sheets)
+
+Annotation_tracker$Epi_Data 
+```
+
+
+```{r}
+immue_endo_t<- d10x.seurat@meta.data%>%
+                  #filter(Tissue_LA_Activity == "Yes") %>%
+                  #filter(Master_Assigned_Cell_Type) %>%
+                  #filter(! is.na(Number_of_lymphoid_aggregates)) %>%
+                  group_by(SampleName,Master_Assigned_Cell_Type) %>%
+                  summarise(count=n()) %>%
+                  mutate(prop= count/sum(count)*100)
+
+anno_df <- d10x.seurat@meta.data  %>%
+           left_join(Annotation_tracker$Epi_Data, by=c("Patient.No."="Patient_ID")) %>%
+           dplyr::filter(LA_Status != "Exclude")  %>% 
+           distinct(Patient.No.,LA_Status,SampleName) %>%
+           column_to_rownames("SampleName")
+
+heatmap_df <- immue_endo_t  %>% 
+              dplyr::select(Master_Assigned_Cell_Type,prop,SampleName) %>%
+              spread(Master_Assigned_Cell_Type, prop) %>%
+              column_to_rownames("SampleName") %>%
+              as.matrix() %>%
+              replace(.,is.na(.),0) %>%
+              t()
+
+heatmap_df %>% 
+t %>%
+prcomp(scale = TRUE) %>%
+augment(.) %>%
+inner_join(anno_df %>% rownames_to_column(".rownames"), by=".rownames") %>%
+  ggplot(aes(x=.fittedPC1, y=.fittedPC2,color=LA_Status,label=.rownames))+
+  geom_point(size=5) +
+  geom_text(nudge_x = 0.2, nudge_y = 0.2,angle=20,size=3) +
+  labs(x="PC1",y="PC2") + 
+  theme_half_open(12) 
+
+
+```
+
+# Final Fig pannel combine using cowplot
+
+```{r}
+fig1top <- plot_grid(fig1a, fig1b, labels = c("A", "B"), ncol = 2, label_size = 10, rel_widths = c(1, 1.15) )
+fig1middle <- plot_grid(fig1c, fig1d, NULL, labels = c("C", "D"), ncol = 3, label_size = 10)
+fig1bottom <- plot_grid(fig1e, fig1f, NULL, labels = c("E", "F"), ncol = 3, label_size = 10)
+fig1 <- plot_grid(fig1top, fig1middle,fig1bottom ,ncol = 1, label_size = 10, align = 'v', hjust=-6, rel_heights = c(0.5, 0.25))
+```
+
+#save figures
+
+```{r}
+ggsave("data/fig1.pdf",fig1, width = 210, 
+       height = 148.5, 
+       units = "mm")
+```
+
+
+#DEG of B-cell in LA true vs false and volcano plot
+```{r}
+#DEG
+
+Bcells<- subset(Final.Immune.Cells.PE, subset = Final_Immune_Cluster_ID %in% "B-cells")
+
+Idents(Bcells) <- Bcells$has_LA #this is to say which columns to use
+
+DEG <- FindMarkers(Bcells, ident.1 = "TRUE", ident.2 = "FALSE")
+
+DEG <- DEG %>% rownames_to_column("genes")
+
+#volcano plot
+fc.p = 0.5
+pv.p = 0.05
+DEG$STATUS = "NOT.SIG"
+DEG[DEG$avg_log2FC < -fc.p & DEG$p_val_adj < pv.p, ]$STATUS = "Down"
+DEG[DEG$avg_log2FC > fc.p & DEG$p_val_adj < pv.p, ]$STATUS = "Up"
+
+p1 <- ggplot(DEG, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
+  geom_point(aes(color = STATUS), cex = 1.45) +
+  scale_color_manual(values = c("darkgreen", "grey", "red")) +
+  ylim(0, 80) +
+  theme_bw(base_size = 15) + 
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) +
+  geom_text_repel(
+    data          = subset(DEG, avg_log2FC > 0.5),
+    aes(label = genes),
+    segment.size  = 0.4,
+    direction     = "y",
+    segment.color = "grey50",
+    hjust         = 0
+  ) +
+  geom_text_repel(
+    data          = subset(DEG, avg_log2FC < -0.5),
+    aes(label = genes),
+    segment.size  = 0.4,
+    direction     = "y",
+    segment.color = "grey50",
+    hjust         = 1
+  ) +
+  geom_hline(yintercept = -log10(pv.p), linetype="dotted", color = "black", size= 0.5) +
+  geom_vline(xintercept = -fc.p, linetype="dotted", color = "black", size= 0.5) +
+  geom_vline(xintercept = fc.p, linetype="dotted", color = "black", size= 0.5) #+
+  #labs(title = paste0(feature, " : ", c, " (n=", nDEG, ") FC: ", fc.p, " pval = ", pv.p))
+
+p1
+
+
+
+#doing DEG and volcano plots based pseudobulk
+library("SingleCellExperiment")
+
+#first convert objects to singleCellExperiiment object
+Bcells2 <- as.SingleCellExperiment(Final.Immune.Cells.PE)
+
+#need library glmGampoi
+BiocManager::install("glmGamPoi")
+library("glmGamPoi")
+
+#This is the grouping of cells
+reduced_sce <- pseudobulk(Bcells2, group_by = vars(Patient.No., has_LA, SampleName, harmonized_major_plus_immune_cell_type), 
+                          n_cells = n())
+
+save("reduced_sce", file = "reduced_sce.rda")
+
+# Remove NA's
+reduced_sce <- reduced_sce[,!is.na(reduced_sce$SampleName)]
+
+colData(reduced_sce)$Patient.No. <- factor(colData(reduced_sce)$Patient.No.)
+colData(reduced_sce)$has_LA <- factor(colData(reduced_sce)$has_LA)
+
+# Use DESeq2's size factor calculation procedure
+fit <- glm_gp(reduced_sce, design = ~ has_LA + harmonized_major_plus_immune_cell_type + Patient.No., size_factor = "ratio", verbose = TRUE)
+
+#to test the differential expression
+es <- test_de(fit, contrast = cond(has_LA = "TRUE") - cond(has_LA = "FALSE"))
+```
+
+
+#pathway analysis
+```{r}
+BiocManager::install("clusterProfiler")
+
+BiocManager::install("msigdbr")
+
+library(clusterProfiler)
+library(msigdbr)
+
+m_df <- msigdbr(species = "Homo sapiens")%>%filter(str_detect(gs_name,"REACTOME"))%>%
+    distinct(gs_name,gene_symbol)
+
+temp <- DEG %>% mutate(keep = case_when(avg_log2FC > 0 & pct.1 > 0.8 ~ TRUE,
+                                avg_log2FC < 0 & pct.2 > 0.8 ~ TRUE,
+                                TRUE ~ FALSE)) %>%
+  filter(keep, p_val_adj < 0.05) %>%
+  mutate(STATUS = ifelse(avg_log2FC > 0, "Up", "Down"))
+
+#temp<-DEG%>%filter(p_val_adj<0.05 & abs(avg_log2FC)>.5)
+oraRes<-temp%>%split(temp$STATUS)%>%lapply(function(x) enricher(x$genes,TERM2GENE = m_df))
+temp<-lapply(names(oraRes),function(x) 
+  oraRes[[x]]%>%as.data.frame()%>%mutate(cluster=x))%>%bind_rows()
+
+
+barplot(oraRes$Up)
+
+dotplot(oraRes$Up)
+
+dotplot(oraRes$Down)
+```
+=======
+>>>>>>> 6c51002ddffc1b651b8965feed359556bbf00675

@@ -16,7 +16,7 @@ library(clusterProfiler)
 library(introdataviz)
 library(CellChat)
 
-lacols<-c("LA+"="#8DB600","LA-"="#F781BF",none="white")
+lacols<-c("LA+"="#8DB600","LA-"="#5E4FA2",none="white")
 
 
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
@@ -151,23 +151,17 @@ res$padj<-p.adjust(res$p)
 #  theme_classic()+theme(strip.background = element_blank())+
 #  scale_fill_manual(values = lacols)+labs(x="")
 
-marker_genes<-markers%>%filter(cluster_name%in%c("B03.HSP+B","B05.EGR+ACB",
-                                                 "B06.NR4A2+ACB","B10.ENO1+PreGC",
-                                                 "B11.SUGCT+DZ GCB","B13.Cycling GCB"))%>%
-    group_by(cluster_name)%>%slice_max(avg_log2FC,n = 3)
-marker_genes<-marker_genes%>%
-  split(f = marker_genes$cluster_name)%>%
-  lapply(function(x) x$geneSymbol)
-pC1<-DotPlot(sc,group.by = "has_LA",features = marker_genes)
+pC1<-DotPlot(bcells,group.by = "has_LA",
+             features = list(B08=c("CRIP1","S100A10","S100A4","ITGB1","CD27"),
+                             B01=c("TCL1A","YBX3","FCER2","IGHD")))
 pC1<-pC1$data%>%
   ggplot(aes(x=id,y=features.plot,col=avg.exp.scaled,size=pct.exp))+
-  geom_point()+facet_wrap(~feature.groups,scales="free",
-                          nrow=length(marker_genes),strip.position="right")+
+  geom_point()+facet_wrap(~feature.groups,scales="free")+
   scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
   theme_bw()+theme(strip.background = element_blank(),
                    strip.text.y = element_text(angle=0,hjust = 0),
                    panel.grid = element_blank())+
-  labs(x="",y="",col="Scaled",size="%")
+  labs(x="",y="",col="z",size="%")
 ```
 
 # Differential expression
@@ -472,24 +466,12 @@ pG2<-temp%>%mutate(Run_Tissue_name=str_remove(cell_ID,"c_.+"))%>%
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 ```
 
 # Metabolism
 ```{r}
 library(limma)
-library(scMetabolsim)
+library(scMetabolism)
 
 sc<-sc.metabolism.Seurat(obj = sc, method = "VISION",
                          imputation = F, ncores = 6, metabolism.type = "KEGG")
@@ -501,12 +483,15 @@ signatures_KEGG_metab <- system.file("data", "KEGG_metabolism_nc.gmt",
 signatures_KEGG_metab <- BaseSet::getGMT(signatures_KEGG_metab)
 signatureSize<-signatures_KEGG_metab%>%as.data.frame()%>%count(sets)
 metabo<-metabo[signatureSize$sets,]
-meta<-aux_table%>%split(f = aux_table$nosub)
+
+aux_table<-aux_table%>%rownames_to_column("Cell")
+meta<-aux_table%>%mutate(has_LA=ifelse(has_LA=="LA+","T","F"))
+meta<-meta%>%split(f = meta$nosub)
 metabo<-lapply(meta,function(x) metabo[,x$Cell])
 designM<-lapply(meta,function(x) model.matrix(~0+has_LA,data=x))
 cont<-lapply(designM,function(x) 
-  makeContrasts(has_LATRUE-has_LAFALSE,levels = x))
-fit<-lapply(names(meta),function(x) lmFit(metabo[[x]],designM[[x]]))
+  makeContrasts(has_LAT-has_LAF,levels = x))
+fit<-lapply(names(meta),function(x) lmFit(log(metabo[[x]]),designM[[x]]))
 names(fit)<-names(meta)
 fit<-lapply(names(fit),function(x) contrasts.fit(fit[[x]],cont[[x]]))
 fit <- lapply(fit,eBayes,robust=TRUE,trend=sqrt(signatureSize$n))
@@ -515,16 +500,17 @@ res<-lapply(fit,topTable,number = 85,coef = 1)
 res<-lapply(names(res),function(x) 
   res[[x]]%>%rownames_to_column("pathway")%>%mutate(ct=x))%>%bind_rows()
 
-i<-res%>%group_by(pathway)%>%summarise(i=sum(logFC))%>%
+i<-res%>%filter(str_detect(ct,"En|Mes|Sm",negate = T))%>%
+  group_by(pathway)%>%summarise(i=sum(logFC))%>%
   mutate(has_LA=ifelse(i>0,"LA+","LA-"))%>%group_by(has_LA)%>%
   slice_max(abs(i),n=5)%>%ungroup()%>%arrange(i)
-pH<-res%>%filter(pathway%in%i$pathway)%>%
+pH<-res%>%filter(pathway%in%i$pathway&str_detect(ct,"En|Mes|Sm|^Ex",negate = T))%>%
   mutate(pathway=factor(pathway,levels=i$pathway))%>%
   ggplot(aes(y=pathway,x=logFC))+geom_density_ridges(alpha=0.1)+
     geom_jitter(aes(col=ct,size= adj.P.Val),height = .1,alpha=0.5)+
     theme_classic()+scale_color_manual(values=alt_cellcols)+
     theme(axis.line.y = element_blank(),axis.ticks.y = element_blank())+
-    scale_size(range=c(5,.5))+
+    scale_size(range=c(5,1),trans="sqrt",breaks = c(1e-10,1e-2,1))+
     guides(colour = "none")+geom_vline(xintercept = 0)
 
 
@@ -537,16 +523,22 @@ partA<-plot_grid(pB+theme(legend.position = "bottom",legend.box = "vertical"),
                  axis = "tb",rel_widths = c(.7,.3))
 partB<-plot_grid(pA+labs(x="")+theme(axis.text.x = element_blank(),
                                      axis.ticks.x = element_blank()),
-                 NULL,pA1,NULL,nrow=4,rel_heights = c(.25,-.05,.55,.15))
-partC<-plot_grid(plot_grid(pC1+theme(legend.position = "n"),pD1,
-                           rel_widths = c(.4,.6),align = "h",axis = "tb"),
-                 pD+theme_classic()+
-                 theme(legend.position ="bottom",legend.box = "vertical"),
-                 nrow=2,rel_heights = c(.4,.6))
-pdf("temp.pdf",width = 15,height = 12)
-plot_grid(plot_grid(partA,partB,NULL,partC,ncol=4,rel_widths = c(.3,.1,.2,.4)),
-          plot_grid(pC+scale_y_continuous(position = "right"),pE,pF,ncol=3,rel_widths = c(.4,.4,.3)),plot_grid(pF1,pG,pG1+theme(legend.position = "bottom",legend.box = "vertical"),ncol=3,rel_widths = c(.15,.4,.45)),nrow=3,rel_heights = c(.4,.3,.3))
-dev.off()
+                 NULL,pA1,NULL,nrow=4,rel_heights = c(.25,-.03,.55,.15))
+partA<-plot_grid(partA,partB,rel_widths = c(.7,.3),labels = c('A','B'))
+partB<-plot_grid(plot_grid(pC,pC1,labels = c('C','D')
+                           ,align = "h",axis = c("tb"),rel_widths = c(.6,.4)),
+                 plot_grid(pD1+theme(legend.position = "bottom",legend.box = "vertical"),
+                           NULL,nrow = 2,rel_heights = c(.7,.3)),
+                 rel_widths = c(.7,.3),labels = c('','E'))
+partC<-plot_grid(pD,NULL,pF,pF1,ncol=4,rel_widths = c(.4,.3,.2,.1),labels = c('F','G','H','I'))
+partD<-plot_grid(NULL,pG,labels = c('J','K'))
+partE<-plot_grid(plot_grid(pG1+labs(size="%",col="z"),NULL,nrow = 2),
+                 pH,rel_widths = c(.6,.4),labels = c('L','M','N'))
+
+pdf("temp.pdf",width = 15,height = 15)
+plot_grid(plot_grid(partA,partB),
+           partC,partD,partE,nrow=4,rel_heights = c(.3,.2,.25,.25))
+ dev.off()
 ```
 
 # maybe

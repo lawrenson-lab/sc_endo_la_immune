@@ -87,7 +87,8 @@ pC<-avged%>%t()%>%scale()%>%t()%>%as.data.frame()%>%
 
 pC1<-temp%>%count(fov_type)%>%
   mutate(fov_type=factor(fov_type,levels = names(cellcols)))%>%
-  ggplot(aes(x=n,y=fov_type))+geom_col()+theme_classic()+scale_x_log10()+        theme(axis.text.y = element_blank(),
+  ggplot(aes(x=n,y=fov_type))+geom_col()+theme_classic()+scale_x_log10()+
+  theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         panel.spacing = unit(.01, "lines"),
         plot.margin=grid::unit(c(0,0,0,-5),"mm"),
@@ -137,7 +138,7 @@ sc@meta.data<-sc@meta.data%>%
 aux_table<-sc@meta.data
 temp<-aux_table%>%distinct(Class,SampleName)
 
-props<-getTransformedProps(aux_table$celltype,
+props<-getTransformedProps(aux_table$nosub,
                            aux_table$SampleName)
 props<-props$TransformedProps[,temp$SampleName]
 designM<-model.matrix(~0+Class,data=temp)#groups around replicates=samplename

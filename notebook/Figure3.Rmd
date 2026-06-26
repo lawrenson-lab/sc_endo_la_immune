@@ -295,6 +295,10 @@ pF<-deg%>%filter(str_detect(ct,"M1|Ear|Eff|Den|Th17|B")&
   theme_bw()+labs(col="LFC",x="",y="")+
   theme(axis.text.x = element_text(angle = 45,vjust = 1,hjust = 1),
         strip.background = element_blank())
+
+#alternative pF
+temp<-netVisual_bubble(cc_res[[1]],sources.use = c("Th17 T-cells","Macrophages M1","Effector Memory CD8 T-cells","Effector CD8 T-cells","Early Exhausted CD8 T-cells","Dendritic Cells"),targets.use = "B-cells", comparison = c(1, 2), angle.x = 45)
+pF<-temp$data%>%filter(interaction_name%in%c("CD40LG_CD40","MIF_CD74_CD44","LGALS9_CD44"))%>%mutate(dataset=ifelse(dataset=="LApos","LA+","LA-"))%>%ggplot(aes(x=dataset,y=group.names,col=prob))+geom_point()+facet_wrap(~interaction_name_2,nrow=3,scales="free_y",space="free_y")+scale_color_viridis_c(option = 'H',trans="sqrt")+theme_bw()+theme(strip.background = element_blank(),panel.grid = element_blank())
 ```
 # CD40 in B cells
 ```{r}
@@ -513,8 +517,18 @@ pH<-res%>%filter(pathway%in%i$pathway&str_detect(ct,"En|Mes|Sm|^Ex",negate = T))
     scale_size(range=c(5,1),trans="sqrt",breaks = c(1e-10,1e-2,1))+
     guides(colour = "none")+geom_vline(xintercept = 0)
 
-
-
+```
+# GLS
+```{r}
+gls<-read_csv("../../Downloads/GLS_by_patient.csv")
+pI<-gls%>%pivot_longer(-1,names_to = "type",values_to = "GLS")%>%
+  mutate(type=str_remove_all(type,"\\..+|-|.mmune"))%>%
+  ggplot(aes(x=type,y=GLS,col=type))+geom_boxplot()+facet_grid(~sample)+
+  theme_classic()+theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
+                        strip.background = element_blank(),
+                        legend.position = "n")+
+  stat_compare_means(label="p.signif",comparisons = list(c("Individual","LA")))+
+  scale_color_manual(values=c("#5E4FA2","#8DB600"))+labs(x="Immune cells")
 ```
 
 ```{r}

@@ -1,0 +1,89 @@
+---
+title: "myeloid_story_LA_paper"
+author: "Raghad Said"
+date: "2026-06-25"
+---
+
+```{r}
+library(tidyverse)
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+
+#load dataset
+endo<- readRDS("/media/cedars/caipirinha/speed/share/fixed_annotated_aux.seurat.rds")
+#eutopic and pe only
+eut_ect<-subset(endo, subset = Class %in% c("Eutopic endometrium", "Peritoneal endometriosis"))
+
+```
+
+```{r}
+sub_myeloid<-subset(eut_ect, subset=harmonized_major_cell_type=="Myeloid cells")
+sub_myeloid<- FindClusters(sub_myeloid, resolution = 0.2)
+
+markers <- list(
+#  "Myeloid" = c("CD68", "ITGAM", "CD14", "CD33", "CSF1R", "AIF1"),
+  "Myeloid" = c("CD68", "CD33"),
+  "M1" = c("IL1B","TNF","CXCL8","CXCL10"),
+  "M2" = c("MRC1","CD163","FOLR2","CCL18"),
+  "MDSC" = c("S100A8","S100A9","OLR1","FCN1","PTGS2"),
+  "Resident" = c("C1QA","C1QB","C1QC","SELENOP"),
+  "APC" = c("HLA-DRA","CD74","FCER1A","CLEC10A"))
+DotPlot(
+    sub_myeloid,
+    features = markers,
+    group.by = "SCT_snn_res.0.2") +
+    RotatedAxis()+
+    theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
+    scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+#updating cluster names
+sub_myeloid@meta.data<-sub_myeloid@meta.data%>%
+  mutate(myeloid_cl=case_when(SCT_snn_res.0.2==0~"M1 macrophages",
+        SCT_snn_res.0.2==1~"M2 macrophages",
+        SCT_snn_res.0.2==2~"DCs",
+        SCT_snn_res.0.2==3~"MDSCs",
+        TRUE~"undefined myeloid"))
+
+#taking out fake clusters
+myeloid_clus <- subset(sub_myeloid, subset = !SCT_snn_res.0.2 %in% c(5,6,7,8,9))
+
+
+```
+
+```{r}
+#inflammatory score
+# Inflammatory gene module
+inflam_genes <- list(c(
+  "IL1B", "CXCL8", "PTGS2", "NLRP3", "CCL20",
+  "PTX3", "TNFAIP3", "NFKBIA", "CEBPB"
+))
+
+# Calculate module score
+m1 <- AddModuleScore(
+  m1,
+  features = inflam_genes,
+  name = "Inflammatory",
+  nbin = 10
+)
+
+# Average score per patient
+score_df <- m1@meta.data %>%
+  group_by(`Patient.No.`, has_LA) %>%
+  summarise(
+    score = mean(Inflammatory1, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Plot
+ggplot(score_df, aes(has_LA, score, color = has_LA)) +
+  geom_boxplot(fill = NA, outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 2, alpha = 0.8) +
+  scale_color_manual(values = c("LA-" = "#7B6FC2",
+                                "LA+" = "#9ACD32")) +
+  theme_classic() +
+  labs(x = NULL, y = "Inflammatory activation score") +
+  NoLegend()
+
+# Statistics
+wilcox.test(score ~ has_LA, data = score_df)

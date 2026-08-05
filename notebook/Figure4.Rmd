@@ -76,31 +76,28 @@ pA00<-temp%>%group_by(index)%>%summarise(n=sum(n))%>%
 ```
 # Cell chat
 ```{r}
-cc_res<-readRDS("docs/CellChat_nosubPE_hasLA.rds")
+cc_res<-readRDS("data/CellChat_PE_hasLA_exclude.rds")
 
-cts<-rownames(cc_res[[1]]@net$LApos$count)
+cts<-rownames(cc_res[[1]]@net$`TRUE`$count)
 pA<-netVisual_diffInteraction(cc_res[[1]],#color.use = alt_cellcols,
                           measure = "count",
                           sources.use = "EnEpi cells",
-                          targets.use = cts[str_detect(cts,"Smo|En|Mes|Ery",negate=T)],
                           remove.isolate = T,
                           weight.scale = T)
 pA1<-netVisual_diffInteraction(cc_res[[1]],#color.use = alt_cellcols,
                           measure = "count",
                           targets.use = "EnEpi cells",
-                          sources.use = cts[str_detect(cts,"Smo|En|Mes|Ery",negate=T)],
                           remove.isolate = T,
                           weight.scale = T)
 pA2<-netVisual_diffInteraction(cc_res[[1]],#color.use = alt_cellcols,
                           measure = "count",
                           sources.use = "EnS cells",
-                          targets.use = cts[str_detect(cts,"Smo|En|Mes|Ery",negate=T)],
+                          #targets.use = cts[str_detect(cts,"Smo|En|Mes|Ery",negate=T)],
                           remove.isolate = T,
                           weight.scale = T)
 pA3<-netVisual_diffInteraction(cc_res[[1]],#color.use = alt_cellcols,
                           measure = "count",
                           targets.use = "EnS cells",
-                          sources.use = cts[str_detect(cts,"Smo|En|Mes|Ery",negate=T)],
                           remove.isolate = T,
                           weight.scale = T)
 
@@ -162,9 +159,11 @@ pB1<-gsea_bp%>%filter(Description%in%enspaths&ct=="EnS cells")%>%
 # Top genes
 ```{r}
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
-sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"&
-                           str_detect(sc$harmonized_major_plus_immune_cell_type,"En")))
+sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"))
 sc@meta.data<-sc@meta.data%>%mutate(has_LA=ifelse(LA_per_Sample>0,"LA+","LA-"))
+sc@meta.data<-sc@meta.data%>%
+  mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
+  mutate(nosub=str_replace(nosub,"Memmo","Memo"))
 gc()
 
 
@@ -214,24 +213,9 @@ pE<-DotPlot(subset(sc,subset = harmonized_major_cell_type=="EnS cells"),
               features = i,group.by = "has_LA")+coord_flip()+
     scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b")+
     scale_size(range=c(1,5))+theme(axis.text = element_text(size=11))
-```
-# ARID5B
-```{r}
-scDEG<-read_csv("docs/has_laDEG-ct100-MAST.tsv",skip = 1)
-temp<-scDEG%>%filter(cell_type=="EnS cells")%>%
-  mutate(STATUS=case_when(avg_log2FC<=-1&p_val_adj<0.05~"Low",
-                          avg_log2FC>=1&p_val_adj<0.05~"Up",
-                          TRUE~"Not.Sig"))
-pF<-temp%>%ggplot(aes(x=avg_log2FC,y=-log10(p_val_adj),col=STATUS))+
-  geom_point()+geom_text_repel(data=temp%>%filter(STATUS!="Not.Sig")
-                               %>%group_by(STATUS)%>%
-                                 slice_min(p_val_adj,n = 3),
-                               aes(label=gene),show.legend = F)+
-  theme_classic()+theme(legend.position = "bottom")+
-  scale_color_manual(values = c("darkgreen", "grey", "red"))   
 
 ```
-
+# arrange figure
 ```{r}
 partA<-plot_grid(pA00+theme(axis.text.x = element_blank(),
                             axis.ticks.x = element_blank(),axis.line.x = element_blank(),

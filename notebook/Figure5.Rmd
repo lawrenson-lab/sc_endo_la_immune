@@ -1,0 +1,136 @@
+---
+title: "Figure 5"
+---
+
+```{r}
+sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
+sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"&
+              str_detect(sc$harmonized_major_plus_immune_cell_type,"^Ex|Ery",negate = T)))
+gc()
+sc$has_LA<-ifelse(sc$LA_per_Sample>0,"LA+","LA-")
+sc@meta.data<-sc@meta.data%>%
+  mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
+  mutate(nosub=str_replace(nosub,"Memmo","Memo")%>%str_remove("Early "))
+
+temp<-read_csv("data/myeloid_subgroups.csv")
+aux_table<-sc@meta.data%>%rownames_to_column("barcode")
+aux_table<-temp%>%select(barcode,myeloid_cl)%>%
+    right_join(aux_table)%>%
+    mutate(nosub=ifelse(!is.na(myeloid_cl),
+                        myeloid_cl,nosub))%>%
+    select(-myeloid_cl)
+aux_table<-aux_table[order(match(aux_table$barcode,colnames(sc))),]
+sc<-AddMetaData(sc,metadata = aux_table,col.name = "nosub")
+
+```
+
+## ARID5B
+```{r}
+scDEG<-read_csv("docs/has_laDEG-ct100-MAST.tsv",skip = 1)
+temp<-scDEG%>%filter(cell_type=="EnS cells")%>%
+  mutate(STATUS=case_when(avg_log2FC<=-1&p_val_adj<0.05~"Low",
+                          avg_log2FC>=1&p_val_adj<0.05~"Up",
+                          TRUE~"Not.Sig"))
+pA<-temp%>%ggplot(aes(x=avg_log2FC,y=-log10(p_val_adj),col=STATUS))+
+  geom_point()+geom_text_repel(data=temp%>%filter(STATUS!="Not.Sig")
+                               %>%group_by(STATUS)%>%
+                                 slice_min(p_val_adj,n = 3),
+                               aes(label=gene),show.legend = F)+
+  theme_classic()+theme(legend.position = "bottom")+
+  scale_color_manual(values = c("darkgreen", "grey", "red"))   
+
+
+temp<-DotPlot(sc,features = "ARID5B",group.by = "nosub",split.by = "has_LA")
+pB<-temp$data%>%separate(id,into = c("ct","has_LA"),sep = "_")%>%
+  filter(ct!="Myeloid cells")%>%arrange(desc(avg.exp))%>%
+  mutate(ct=factor(ct,levels=unique(ct)))%>%
+  ggplot(aes(x=has_LA,y=ct,col=avg.exp,size=pct.exp))+
+  geom_point()+scale_color_viridis_c(option = 'B',direction = -1)+
+  theme_classic()+labs(x="",y="",col="Avg.Exp",size="%")
+
+```
+
+# Menstrual cycle
+```{r}
+bulk<-read_csv("data/TMM_normalised_endometrial_expression_ARID5B_IGFBP5_FOXO1.csv")
+bulk<-bulk%>%
+  mutate(Stage=case_when(Stage.of.Cycle==1~"Menstrual",
+                                  Stage.of.Cycle==2~"Early-proliferative",
+                                  Stage.of.Cycle==3~"Mid-proliferative",
+                                  Stage.of.Cycle==4~"Late-proliferative",
+                                  Stage.of.Cycle==5~"Early-secretory",
+                                  Stage.of.Cycle==6~"Mid-secretory",
+                                  Stage.of.Cycle==7~"Late-secretory"))%>%
+  arrange(Stage.of.Cycle)%>%
+  mutate(Stage=factor(Stage,levels=unique(Stage)))
+pC<-bulk%>%ggplot(aes(x=Stage,y=ARID5B_CPM))+
+  geom_boxplot()+theme_classic()+labs(x="Stage of cycle",y="ARID5B (CPM)")+
+  theme(axis.text.x = element_text(angle=45,vjust =1,hjust = 1))
+
+```
+# D-E by Sueanne's ARID5B_KD.R
+
+# TNFRSF18
+```{r}
+tnk<-subset(tnk,cells = which(str_detect(sc$nosub,"T-|NK")))
+temp<-DotPlot(tnk,features = c("TNFRSF18","TNFRSF4"),group.by = "nosub",split.by = "has_LA")
+temp<-temp$data%>%separate(id,into=c("ct","has_LA"),sep = "_")
+
+pF<-temp%>%filter(ct!="Myeloid cells")%>%arrange(desc(avg.exp))%>%
+    mutate(ct=factor(ct,levels=unique(ct)))%>%
+    ggplot(aes(x=has_LA,y=ct,col=avg.exp,size=pct.exp))+
+    geom_point()+scale_color_viridis_c(option = 'B',direction = -1)+
+    theme_classic()+labs(x="",y="",col="Avg.Exp",size="%")+
+  facet_grid(~features.plot)+theme(strip.background = element_blank())
+
+save(pB,pC,pD,pE,pF,pG,file = "docs/Fig5.RData")
+
+```
+# CD40 in B cells
+```{r}
+
+files<-list.files()
+files<-files[str_detect(files,"bg")][-1]#no endometrioma
+metadata<-lapply(files,vroom::vroom)%>%bind_rows()
+gc()
+metadata<-metadata%>%filter(str_detect(fov_type,"CD|NK"))
+mat<-vroom::vroom("endometrium.csv")%>%filter(cell_ID%in%metadata$cell_ID)
+mat<-vroom::vroom("PE.csv")%>%filter(cell_ID%in%metadata$cell_ID)%>%bind_rows(mat)
+gc()    
+
+mat<-mat%>%column_to_rownames("cell_ID")%>%t()
+negavg<-colMeans(mat[c("Ms IgG1","Rb IgG"),])
+normi<-t(t(mat)-negavg)
+normi<-asinh(normi/5)
+nobatch<-sva::ComBat(dat = normi,batch = str_remove(colnames(normi),"c_1.+"),
+                     BPPARAM = BiocParallel::MulticoreParam(workers = 2))
+
+temp<-metadata%>%select(cell_ID,dom_nEndoh1_75,Class,fov_type)
+temp<-nobatch%>%t()%>%as.data.frame()%>%
+  rownames_to_column("cell_ID")%>%select(cell_ID,GITR)%>%
+  inner_join(temp)
+temp<-temp%>%mutate(index=case_when(dom_nEndoh1_75==6~1,
+                                    dom_nEndoh1_75==3~2,
+                                    dom_nEndoh1_75==4~3,
+                                    dom_nEndoh1_75==2~4,
+                                    dom_nEndoh1_75==1~6,
+                                    TRUE~dom_nEndoh1_75))#as defined in Fig2
+
+domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")
+names(domcol)<-6:1
+pG<-temp%>%filter(dom_nEndoh1_75!=7)%>%mutate(Run_Tissue_name=str_remove(cell_ID,"c_.+"))%>%
+    group_by(Run_Tissue_name,index,fov_type)%>%summarise(GITR=mean(GITR))%>%
+    ggplot(aes(x=as.factor(index),y=GITR,col=as.factor(index)))+
+    geom_violin()+geom_boxplot(width=.1)+
+    labs(x="Domain",y="Average GITR")+theme_classic()+
+    stat_compare_means(label="p.signif",ref.group = 1)+
+    scale_color_manual(values=domcol)+facet_wrap(~fov_type,nrow=3)+
+    theme(legend.position = "n",strip.background = element_blank())
+
+```
+
+
+# arrange figure
+```{r}
+partA<-plot_grid(NULL,pB+theme(legend.position = "bottom"),plot_grid(pC,NULL,nrow = 2),pD+theme(legend.position = "bottom"),ncol = 4,rel_widths = c(.25,.15,.3,.3),labels = c('A','B','C','D'))
+```

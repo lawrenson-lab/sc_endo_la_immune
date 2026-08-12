@@ -10,6 +10,7 @@ library(ggplot2)
 library(ComplexHeatmap)
 library(circlize)
 library(ggpubr)
+library(ggnewscale)
 
 files<-list.files()
 files<-files[str_detect(files,"bgclus")]
@@ -123,7 +124,7 @@ library(Seurat)
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 sc<-subset(sc,cells = which(sc$Class%in%c("Eutopic endometrium","Peritoneal endometriosis")&
                             str_detect(sc$harmonized_major_plus_immune_cell_type,
-                                 "Excl|Ery",negate=T)))
+                                 "^Ex|Ery",negate=T)))
 #fix labels
 sc@meta.data<-sc@meta.data%>%
   mutate(celltype=case_when(str_detect(harmonized_major_cell_type,"Epi|Meso")~"Epithelial",
@@ -134,11 +135,16 @@ sc@meta.data<-sc@meta.data%>%
 sc@meta.data<-sc@meta.data%>%
   mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
   mutate(nosub=str_replace(nosub,"Memmo","Memo")%>%str_remove("Early "))
+temp<-read_csv("data/myeloid_subgroups.csv")
+aux_table<-sc@meta.data%>%rownames_to_column("barcode")
+aux_table<-temp%>%select(barcode,myeloid_cl)%>%
+  right_join(aux_table)%>%
+  mutate(nosub=ifelse(!is.na(myeloid_cl),
+                      myeloid_cl,nosub))%>%
+  select(-myeloid_cl)
 
-aux_table<-sc@meta.data
 temp<-aux_table%>%distinct(Class,SampleName)
-
-props<-getTransformedProps(aux_table$nosub,
+props<-getTransformedProps(aux_table$celltype,
                            aux_table$SampleName)
 props<-props$TransformedProps[,temp$SampleName]
 designM<-model.matrix(~0+Class,data=temp)#groups around replicates=samplename
@@ -183,28 +189,47 @@ plot_grid(pE,pE1,rel_widths = c(.4,.6))
 ```
 # RNA difference
 ```{r}
-alt_cellcols<-CellChat::scPalette(length(unique(sc$nosub)))
+alt_cellcols<-CellChat::scPalette(length(unique(aux_table$nosub)))
 #alt_cellcols<-grDevices::colorRampPalette(alt_cellcols)(30)
 names(alt_cellcols)<-sort(unique(aux_table$nosub))
 alt_cellcols["B-cells"]<-cellcols["B cells"]
 alt_cellcols["Plasmablast/Plasma cells"]<-cellcols["Plasma cells"]
 
-#weird <- scales::trans_new("signed_sqrt",
-#       transform=function(x) sign(x)*sqrt(abs(x)),
-#       inverse=function(x) sign(x)*x**2)
-temp<-aux_table%>%count(nosub,Class)
-i<-temp%>%filter(Class=="Peritoneal endometriosis")%>%
-  arrange(n)%>%distinct(nosub)%>%unlist()
-pF<-temp%>%mutate(nosub=factor(nosub,levels=i),
-                  Class=factor(Class,levels=rev(names(classcols))))%>%
-  ggplot(aes(x=n,y=Class,fill=nosub))+geom_col()+
-  facet_grid(rows=vars(nosub),switch="y")+
-  scale_x_log10()+scale_fill_manual(values=alt_cellcols)+
-  theme_classic()+theme(legend.position = "n",strip.background =element_blank(),
-                        strip.text.y.left = element_text(angle=0,vjust = .5,hjust = 1),
-                        panel.spacing = unit(.02, "lines"),axis.text.y = element_blank(),
-                        axis.line.y = element_blank(),axis.ticks.y = element_blank())+
-  labs(x="Cells",y="")
+temp<-aux_table%>%distinct(Class,SampleName)
+props<-getTransformedProps(aux_table$celltype,
+                           aux_table$SampleName)
+props<-props$TransformedProps[,temp$SampleName]
+designM<-model.matrix(~0+Class,data=temp)#groups around replicates=samplename
+colnames(designM)<-str_replace(colnames(designM)," ","_")
+fit<-lmFit(props,designM)
+cont<-makeContrasts(ClassPeritoneal_endometriosis-ClassEutopic_endometrium,levels = designM)
+fit<-contrasts.fit(fit,cont)
+fit <- eBayes(fit, robust=TRUE)
+resc<-topTable(fit,number = nrow(props),coef = 1)
+resc<-resc%>%rownames_to_column("cell_type")
+resc<-resc%>%arrange(logFC)%>%
+  mutate(cell_type=factor(cell_type,levels = cell_type))
+
+pF<-resc%>%filter(cell_type!="Myeloid cells")%>%
+  mutate(Class=ifelse(logFC>0,"Peritoneal endometriosis",
+                               "Eutopic endometrium"))%>%
+  ggplot(aes(x=logFC,y=cell_type,col=Class))+
+  geom_point(aes(size=adj.P.Val))+
+  geom_segment(aes(xend=0))+
+  geom_vline(xintercept = 0)+
+  scale_color_manual(values=classcols)+theme_classic()+
+  theme(axis.line.y = element_blank(),axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        plot.margin=grid::unit(c(0,0,0,-4), "mm"))+
+  scale_size(range=c(5,1),trans="log10",breaks = c(1e-5,1e-3,1e-1))
+
+temp<-aux_table%>%
+  filter(nosub!="Myeloid cells")%>%count(nosub)%>%
+  mutate(nosub=factor(nosub,levels=levels(pF$data$cell_type)))
+pF0<-temp%>%ggplot(aes(x=n,y=nosub,fill=nosub))+geom_col()+
+  scale_fill_manual(values=alt_cellcols)+theme_classic()+
+  theme(legend.position = "n")+
+  labs(x="Total cells",y="Cell type")+scale_x_log10()
 ```
 ## Subsets 
 ```{r}
@@ -228,33 +253,59 @@ coords<-tcoords%>%mutate(ct="T-cells")%>%
   bind_rows(nontcoords%>%mutate(ct="non T-cells"))
 coords<-aux_table%>%select(barcode,nosub,Class)%>%
   right_join(coords)
-coords<-coords%>%group_by(nosub)%>%mutate(center1=median(umap_1),
-                                          center2=median(umap_2))
+temp<-coords%>%group_by(nosub,ct)%>%
+  summarise(center1=median(umap_1),
+            center2=median(umap_2))
 
-i<-temp%>%distinct(ct,nosub)%>%
-  mutate(ct=factor(ct,levels=c("non Immune","non T-cells","T-cells")))%>%
-  arrange(ct,nosub)
-alt_cellcols<-alt_cellcols[i$nosub]
-pF1<-coords%>%
-    mutate(nosub=factor(nosub,levels=names(alt_cellcols)))%>%
+pF1<-coords%>%filter(nosub!="Myeloid cells"&!is.na(nosub))%>%
     ggplot(aes(x=umap_1,y=umap_2,col=nosub))+
-    geom_point(size=.1)+geom_text_repel(data=coords%>%
-                                          distinct(nosub,center1,center2),
-                                        aes(x=center1,y=center2,label=nosub),
-                                        col="black")+
+    geom_point(size=.1)+
+    geom_text_repel(data=temp,
+                    aes(x=center1,y=center2,label=nosub),
+                    col="black")+
     scale_color_manual(values=alt_cellcols)+
-    guides(col=guide_legend(override.aes = list(size=5),ncol=1))+
     facet_grid(~ct)+theme_light()+
     theme(strip.background = element_blank(),axis.text.x = element_blank(),
-          legend.position = "n",plot.margin=grid::unit(c(0,1,-5,0),"mm"))+
-  labs(col="cell type",x="")
-pF2<-coords%>%ggplot(aes(x=umap_1,y=umap_2))+
-    stat_density_2d(aes(fill = ..level..), geom = "polygon")+
-    facet_grid(rows=vars(Class),cols=vars(ct))+
-    scale_fill_viridis_c(option = "B",direction = -1,labels=c("Min","Max"),breaks=c(0,.01))+
-    theme_light()+theme(strip.background = element_blank(),
-                        strip.text.y.right = element_text(colour ="black"))+
-    labs(x="UMAP 1",y="UMAP 2")
+          legend.position = "n",panel.grid = element_blank())+
+    labs(x="")
+
+pF2<-pF1$data %>%
+    filter(nosub != "Myeloid cells" & !is.na(nosub)) %>%
+    ggplot(aes(x = umap_1, y = umap_2)) +
+    geom_point(aes(col = nosub), size = .1,alpha=.1) +
+    scale_color_manual(values = alt_cellcols) +
+    new_scale_color() +
+    stat_density_2d(
+        data = pF1$data %>%
+            filter(nosub != "Myeloid cells" & !is.na(nosub) &
+                     Class == "Eutopic endometrium"),
+        aes(color = after_stat(level))) +
+    #scale_color_viridis_c(option = "B", direction = -1) +
+    facet_grid(~ct) +
+    theme_light()+
+    theme(strip.background = element_blank(),
+          axis.text.x = element_blank(),
+          panel.grid = element_blank(),
+          legend.position = "n")+labs(x="")
+
+pF3<-pF1$data %>%
+    filter(nosub != "Myeloid cells" & !is.na(nosub)) %>%
+    ggplot(aes(x = umap_1, y = umap_2)) +
+    geom_point(aes(col = nosub), size = .1,alpha=.1) +
+    scale_color_manual(values = alt_cellcols) +
+    new_scale_color() +
+    stat_density_2d(
+        data = pF1$data %>%
+            filter(nosub != "Myeloid cells" & !is.na(nosub) &
+                     Class == "Peritoneal endometriosis"),
+        aes(color = after_stat(level)),) +
+#    scale_color_viridis_c(option = "B", direction = -1) +
+    facet_grid(~ct) +
+    theme_light()+
+    theme(strip.background = element_blank(),
+          panel.grid = element_blank(),
+          legend.position = "n")+labs(x="UMAP 1")
+
 ```
 # CellChat
 ```{r}
@@ -263,7 +314,7 @@ library(ggrepel)
 
 #names(alt_cellcols)<-sort(unique(aux_table$harmonized_major_plus_immune_cell_type))
 
-cc_res<-readRDS("docs/CellChat_nosubPE_Eu.rds")
+cc_res<-readRDS("data/CellChat_PE_Eu.rds")
 compareInteractions(cc_res[[1]], show.legend = F, group = c(1,2))
 
 cc_res$`Eutopic endometrium`<-netAnalysis_computeCentrality(cc_res$`Eutopic endometrium`)
@@ -277,31 +328,50 @@ temp<-lapply(names(temp), function(x)
     rownames_to_column("ct"))%>%bind_rows()
 colnames(temp)[2]<-"total_interactions"
 
-pG<-temp%>%filter(ct!="Erythrocytes")%>%
-    mutate(ct=factor(ct,levels=rev(levels(pF$data$nosub))))%>%
+pG<-temp%>%filter(ct!="Myeloid cells")%>%
+    mutate(ct=factor(ct,levels=levels(pF0$data$nosub)))%>%
     ggplot(aes(y=ct,x=total_interactions,fill=Class))+
     geom_bar(stat="identity",position="fill")+
     geom_vline(xintercept = .5)+
     theme_classic()+theme(axis.line.y = element_blank(),
                           legend.position = "none")+
     scale_fill_manual(values=classcols)+
-    labs(y="",x="Total interaction")
+    labs(y="",x="Interaction proportion")
+pG1<-temp%>%group_by(ct)%>%
+  summarise(total_interactions=sum(total_interactions))%>%
+  mutate(ct=str_replace(ct,"Memmory","Memory"))%>%
+  mutate(ct=factor(ct,levels=levels(pG$data$ct)))%>%
+  ggplot(aes(x=total_interactions,y=ct,fill=ct))+geom_col()+
+  scale_fill_manual(values=alt_cellcols)+theme_classic()+
+  theme(legend.position = "n",axis.text.y = element_blank(),
+        axis.ticks.y=element_blank(),
+        plot.margin=grid::unit(c(0,0,0,-3), "mm"))+
+  labs(x="",y="")
 
 cts<-unique(temp$ct)
 #netVisual_diffInteraction() not working
 pH<-netVisual_diffInteraction(cc_res[[1]],
                               comparison = c(1,2),
-                              targets.use = "B-cells",
+                              targets.use = "Mesothelial cells",
                               weight.scale = T,
-                              remove.isolate = T,
-                              sources.use=cts[cts!="Erythrocytes"])
+                              remove.isolate = T)
 
 pH1<-netVisual_diffInteraction(cc_res[[1]],
                               comparison = c(1,2),
-                              sources.use = "B-cells",
+                              sources.use = "Mesothelial cells",
                               weight.scale = T,
-                              remove.isolate = T,
-                              targets.use=cts[cts!="Erythrocytes"])
+                              remove.isolate = T)
+pH2<-netVisual_diffInteraction(cc_res[[1]],
+                              comparison = c(1,2),
+                              targets.use = "Plasmablast/Plasma cells",
+                              weight.scale = T,
+                              remove.isolate = T)
+
+pH3<-netVisual_diffInteraction(cc_res[[1]],
+                              comparison = c(1,2),
+                              sources.use = "Plasmablast/Plasma cells",
+                              weight.scale = T,
+                              remove.isolate = T)
 
 ```
 # CosMx neighbors

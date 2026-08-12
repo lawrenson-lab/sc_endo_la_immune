@@ -35,50 +35,45 @@ metadata<-metadata%>%filter(dom_nEndoh1_75!=i&!fov_type%in%c("unknown","low_sign
 
 # Supplementary heatmap
 ```{r}
-files<-list.files("docs",full.names = T)
-files<-files[str_detect(files,"metag")]
-files<-files[str_remove_all(files,"docs/|_metagenes.csv")%in%
-               unique(meta$Run_Tissue_name)]
-metagenes<-lapply(files,read_csv)
-names(metagenes)<-str_remove_all(files,"docs/|_metagenes.csv")
-metagenes<-lapply(names(metagenes),function(x) 
-  {tab<-metagenes[[x]];
-  tab<-tab%>%column_to_rownames("probe");
-  colnames(tab)<-paste0(x,"part_",colnames(tab));
-  tab})%>%bind_cols()
-zscores<-t(scale(t(metagenes)))
+files<-list.files("data",full.names = T)
+files<-files[str_detect(files,"bg")][-1]#no endometrioma
+metadata<-lapply(files,vroom::vroom)%>%bind_rows()
+gc()
 
-temp<-meta%>%
-  count(protodomain,merged_corrected)%>%
-  group_by(protodomain)%>%
-  mutate(total=sum(n),prop=100*n/total)%>%
-  select(protodomain,merged_corrected,prop)%>%
-  pivot_wider(names_from = merged_corrected,values_from = prop)
-temp<-temp%>%mutate(across(-1,function(x) replace_na(x,0)))%>%
-  column_to_rownames("protodomain")
-temp<-t(temp)[,colnames(zscores)]
+mat<-vroom::vroom("endometrium.csv")
+mat<-vroom::vroom("PE.csv")
+gc()    
 
-annot<-metadata%>%distinct(protodomain,Run_Tissue_name,Class,dom_nEndoh1_75)
-annot<-annot[order(match(annot$protodomain,colnames(temp))),]
-nobatch<-sva::ComBat(dat = metagenes,batch = annor$Run_Tissue_name,par.prior = T)
-cor_dist<-cor(nobatch)
-cl<-hclust(as.dist(1-cor_dist),method="ward.D2")
-hm1<-Heatmap(temp,show_column_names = F,
-        top_annotation = HeatmapAnnotation(Slide=annot$Run_Tissue_name,
-                                           Domain=annot$dom_nEndoh1_75,
-                                           Class=annot$Class,
-                                        col=list(Class=classcols,
-                                                 Slide=slidecol,
-                                                 Domain=domcol)),
-       cluster_rows = F,cluster_columns = cl,use_raster = F,name="%",
-       column_dend_height = unit(4, "cm"),
-       col=colorRamp2(c(100,50,25,12,6,0), c("#14081D","#651B79","#de7065ff","#FFC28B","#FCFDBF","white")))
-hm2<-Heatmap(zscores,show_column_names = F,show_row_dend = F,
-             use_raster = F,name="zscore",cluster_columns = cl)
+i<-metadata%>%select(Run_Tissue_name,protodomain,cell_ID)%>%
+  split(f = metadata$protodomain)
+metagenes<-lapply(i,function(x) mat%>%filter(cell_ID%in%x$cell_ID)%>%select(-1)%>%colMeans())
+temp<-metagenes%>%bind_cols()
+metagenes<-as.matrix(metagenes)
+rownames(metagenes)<-colnames(mat)[-1]
 
-pdf("suppHM.pdf",width = 11,height = 8)
- hm1%v%hm2
-dev.off()
+annot<-metadata%>%distinct(protodomain,Class,Run_Tissue_name,dom_nEndoh1_75)
+annot<-annot%>%mutate(index=case_when(dom_nEndoh1_75==6~1,
+                                   dom_nEndoh1_75==3~2,
+                                   dom_nEndoh1_75==4~3,
+                                   dom_nEndoh1_75==2~4,
+                                   dom_nEndoh1_75==1~6,
+                                   TRUE~dom_nEndoh1_75))#as defined in Fig2
+metagenes<-metagenes[,annot$protodomain]
+nobatch<-sva::ComBat(dat = metagenes,batch = annot$Run_Tissue_name,par.prior = T)
+#cor_dist<-cor(nobatch)
+#cl<-hclust(as.dist(1-cor_dist),method="ward.D2")
+
+Heatmap(asinh(nobatch[str_detect(rownames(zscores),
+                                 "Chann|IgG",negate = T),]/5),
+        show_column_names = F,show_row_dend = F,
+        clustering_method_columns = "ward.D2",
+        use_raster = F,name="expr",
+        top_annotation = HeatmapAnnotation(Class=annot$Class,
+                                           D=annot$index,
+                                           Sample=annot$Run_Tissue_name,
+        col=list(Class=classcols,D=domcol,Sample=kelly.colours)),
+        column_split  = annot$index,col = colorRamp2(c(-2,0,2,4,6),                           c("white","#FCFDBF","#FFC28B","#de7065ff","#651B79")))
+
 ```
 
 # Composition heatmap
@@ -170,7 +165,7 @@ pB<-domDEG%>%filter(gene%in%i$gene)%>%
   ggplot(aes(y=index,x=gene,col=avg_log2FC,size=p_val_adj))+
   geom_point()+scale_size(range=c(5,1),trans = "sqrt",
                           breaks = c(0,1e-4,1e-2,1))+
-  theme_classic()+scale_color_gradient2(low="blue",high = "red")+
+  theme_classic()+scale_color_gradient2(low="#2166ac",mid = "#f7f7f7", high = "#b2182b")+
   theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
   labs(x="Protein",y="Domain",col="LFC",size="Padj")
 
@@ -355,11 +350,11 @@ pG<-blobs%>%count(Class,Run_Tissue_name,dbcl,name="Size")%>%
 
 ## blob composition
 ```{r}
-#temp<-blobs%>%filter(str_detect(fov_type,"B|CD|Mye|Plas|NK"))%>%
-#  count(Class,Run_Tissue_name,dbcl,fov_type,name="cells")%>%
-#  group_by(Class,Run_Tissue_name,dbcl)%>%
-#  mutate(total=sum(cells),prop=100*cells/total)%>%
-#  ungroup()
+temp<-blobs%>%filter(str_detect(fov_type,"B|CD|Mye|Plas|NK"))%>%
+  count(Class,Run_Tissue_name,dbcl,fov_type,name="cells")%>%
+  group_by(Class,Run_Tissue_name,dbcl)%>%
+  mutate(total=sum(cells),prop=100*cells/total)%>%
+  ungroup()
 
 #pH1<-temp%>%count(Class,fov_type)%>%
 #  left_join(temp%>%distinct(Class,Run_Tissue_name,dbcl)%>%
@@ -387,12 +382,14 @@ pG<-blobs%>%count(Class,Run_Tissue_name,dbcl,name="Size")%>%
 
 temp<-temp%>%ungroup()%>%mutate(box=cut(total,breaks = 10))
 formula <- y ~ x    
-pG1<-ggplot(temp, aes(x= total, y= prop, group=fov_type,color = fov_type)) +
-    geom_smooth(method = "loess", formula = formula, se = F,)+
-  scale_color_manual(values=cellcols)+labs(x="Size",y='%',colour="Cell type")+
-  scale_y_continuous(limit=c(0,NA))+theme_classic()+
-  facet_wrap(~Class,nrow=2,scales = "free")+scale_x_sqrt()+
-  theme(legend.position="none",strip.background = element_blank())
+pG1<-temp%>%filter(total<2000)%>%
+  ggplot(aes(x= total, y= prop, group=fov_type,color = fov_type)) +
+                  geom_smooth(method = "loess", formula = formula, se = F,)+
+                  scale_color_manual(values=cellcols)+
+              labs(x="Size",y='%',colour="Cell type")+
+              scale_y_continuous(limit=c(0,NA))+theme_classic()+
+              facet_wrap(~Class,nrow=2,scales = "free_y")+
+              theme(legend.position="none",strip.background = element_blank())
 
 ```
 

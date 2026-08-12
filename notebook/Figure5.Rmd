@@ -26,19 +26,25 @@ sc<-AddMetaData(sc,metadata = aux_table,col.name = "nosub")
 
 ## ARID5B
 ```{r}
-scDEG<-read_csv("docs/has_laDEG-ct100-MAST.tsv",skip = 1)
-temp<-scDEG%>%filter(cell_type=="EnS cells")%>%
+deg<-data.table::fread("docs/hasLA_DEG_sc_newMyeloid_MAST.gz")
+
+temp<-deg%>%filter(ct=="EnS cells")%>%
   mutate(STATUS=case_when(avg_log2FC<=-1&p_val_adj<0.05~"Low",
                           avg_log2FC>=1&p_val_adj<0.05~"Up",
                           TRUE~"Not.Sig"))
-pA<-temp%>%ggplot(aes(x=avg_log2FC,y=-log10(p_val_adj),col=STATUS))+
-  geom_point()+geom_text_repel(data=temp%>%filter(STATUS!="Not.Sig")
-                               %>%group_by(STATUS)%>%
-                                 slice_min(p_val_adj,n = 3),
-                               aes(label=gene),show.legend = F)+
-  theme_classic()+theme(legend.position = "bottom")+
-  scale_color_manual(values = c("darkgreen", "grey", "red"))   
-
+#min(temp$p_val_adj[temp$p_val_adj>0])
+temp<-temp%>%mutate(p_pos=p_val_adj+p_val_adj+1e-309)
+pA<-temp%>%ggplot(aes(x=avg_log2FC,y=-log10(p_pos),col=STATUS))+
+    geom_point(size=.5)+geom_text_repel(data=temp%>%filter(STATUS!="Not.Sig")
+                                 %>%group_by(STATUS)%>%
+                                     slice_min(p_pos,n = 5),
+                                 aes(label=gene),size=3,show.legend = F)+
+    theme_classic()+theme(panel.grid = element_blank(),legend.position = "bottom")+
+    scale_color_manual(values = c("#2166ac", "grey", "#b2182b"))+
+  geom_vline(xintercept = 1,linetype="dotted")+
+  geom_vline(xintercept = -1,linetype="dotted")+
+  guides(col=guide_legend(override.aes = list(size=3)))+
+  labs(x="LFC",y="-log10(P.adj)")   
 
 temp<-DotPlot(sc,features = "ARID5B",group.by = "nosub",split.by = "has_LA")
 pB<-temp$data%>%separate(id,into = c("ct","has_LA"),sep = "_")%>%
@@ -68,11 +74,11 @@ pC<-bulk%>%ggplot(aes(x=Stage,y=ARID5B_CPM))+
   theme(axis.text.x = element_text(angle=45,vjust =1,hjust = 1))
 
 ```
-# D-E by Sueanne's ARID5B_KD.R
+# D-G by Sueanne's ARID5B_KD.R
 
 # TNFRSF18
 ```{r}
-tnk<-subset(tnk,cells = which(str_detect(sc$nosub,"T-|NK")))
+tnk<-subset(sc,cells = which(str_detect(sc$nosub,"T-|NK")))
 temp<-DotPlot(tnk,features = c("TNFRSF18","TNFRSF4"),group.by = "nosub",split.by = "has_LA")
 temp<-temp$data%>%separate(id,into=c("ct","has_LA"),sep = "_")
 
@@ -86,7 +92,7 @@ pF<-temp%>%filter(ct!="Myeloid cells")%>%arrange(desc(avg.exp))%>%
 save(pB,pC,pD,pE,pF,pG,file = "docs/Fig5.RData")
 
 ```
-# CD40 in B cells
+# GITR in cosmx
 ```{r}
 
 files<-list.files()
@@ -132,5 +138,10 @@ pG<-temp%>%filter(dom_nEndoh1_75!=7)%>%mutate(Run_Tissue_name=str_remove(cell_ID
 
 # arrange figure
 ```{r}
-partA<-plot_grid(NULL,pB+theme(legend.position = "bottom"),plot_grid(pC,NULL,nrow = 2),pD+theme(legend.position = "bottom"),ncol = 4,rel_widths = c(.25,.15,.3,.3),labels = c('A','B','C','D'))
+partA<-plot_grid(plot_grid(pA,NULL,nrow = 2,rel_heights = c(.7,.3)),pB+theme(legend.position = "bottom"),pC,pD+theme(legend.position = "bottom"),ncol = 4,rel_widths = c(.25,.2,.2,.35),labels = c('A','B','C','D'))
+partB<-plot_grid(NULL,pE,rel_widths = c(.3,.7),labels = c('E','F'))
+partC<-plot_grid(pF,pG,NULL,ncol=3,rel_widths = c(.3,.2,.5))
+pdf("temp.pdf",width = 14,height = 11)
+ plot_grid(partA,partB,partC,nrow=3,rel_heights = c(.4,.3,.3))
+dev.off()
 ```

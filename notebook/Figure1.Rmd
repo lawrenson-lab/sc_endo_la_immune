@@ -420,3 +420,25 @@ save(hm0,p1,lgd0,pB,pB1,pC,pC1,pE,pH1,pI,
 
 ```
 
+#supplementary Fig
+```{r}
+markers <- list(
+#  "Myeloid" = c("CD68", "ITGAM", "CD14", "CD33", "CSF1R", "AIF1"),
+  "Myeloid" = c("CD68", "CD33"),
+  "M1" = c("IL1B","TNF","CXCL8","CXCL10"),
+  "M2" = c("MRC1","CD163","FOLR2","CCL18"),
+  "MDSC" = c("FCGR2A","S100A8","S100A9","FUT4","OLR1","FCN1","PTGS2", "VCAN", "LYZ", "FCGR3B", "CEACAM8", "CXCR2"),
+  "Resident" = c("C1QA","C1QB","C1QC","SELENOP"),
+  "APC" = c("HLA-DRA","CD74","FCER1A","CLEC10A"))
+
+Idents(sub_myeloid)<-"myeloid_cl"
+DotPlot(
+    subset(sub_myeloid,idents = "undefined myeloid", invert = TRUE),
+    features = markers,
+    group.by = "myeloid_cl") +
+    RotatedAxis()+
+    theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
+    scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+```
+
+

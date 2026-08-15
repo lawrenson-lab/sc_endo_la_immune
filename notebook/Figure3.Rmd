@@ -331,10 +331,25 @@ pD<-gsea_bp%>%filter(Description%in%j&ct=="B-cells")%>%
 ```{r}
 cc_res<-readRDS("data/CellChat_PE_hasLA_exclude.rds")
 
+temp<-lapply(names(cc_res)[-1],function(x)
+  rowSums(cc_res[[x]]@net$count)+colSums(cc_res[[x]]@net$count))
+names(temp)<-names(cc_res)[-1]
+temp<-lapply(names(temp), function(x) 
+  temp[[x]]%>%as.data.frame()%>%mutate(has_LA=x)%>%
+    rownames_to_column("ct"))%>%bind_rows()
+colnames(temp)[2]<-"total_interactions"
+pE0<-temp%>%mutate(ct=str_replace(ct,"Memmo","Memo"))%>%
+  pivot_wider(names_from = has_LA,values_from = total_interactions)%>%
+  ggplot(aes(x=`FALSE`,y=`TRUE`,col=ct,label=ct))+geom_point()+
+  geom_text_repel(size=3)+
+  geom_abline(intercept = 0,slope = 1,linetype = "dashed")+
+  scale_color_manual(values=alt_cellcols)+theme_classic()+
+  theme(legend.position = 'n')+labs(x="LA-",y="LA+")
+
 cts<-rownames(cc_res[[1]]@net$`TRUE`$count)
 pE<-netVisual_diffInteraction(cc_res[[1]],color.use = alt_cellcols,
                               measure = "count",
-                              targets.use = "B-cells",
+                              targets.use = "Exhausted CD8 T-cells",
                               sources.use = cts[str_detect(cts,"Smo|En|Mes|Ery",negate=T)],
                               remove.isolate = T,
                               weight.scale = T)

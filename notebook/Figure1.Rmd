@@ -11,6 +11,7 @@ library(ComplexHeatmap)
 library(circlize)
 library(ggpubr)
 library(ggnewscale)
+source("script/netVisual_diffInteraction_fixed.R")
 
 files<-list.files()
 files<-files[str_detect(files,"bgclus")]

@@ -12,6 +12,8 @@ library(rstatix)
 library(introdataviz)
 library(ggtext)
 library(ComplexHeatmap)
+source("script/netVisual_diffInteraction_fixed.R")
+
 lacols<-c("LA+"="#8DB600","LA-"="#5E4FA2",none="white")
 
 deg<-read_csv("docs/has_laDEG-nosub_bulk-MAST.tsv")

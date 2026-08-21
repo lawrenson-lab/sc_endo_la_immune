@@ -15,6 +15,7 @@ library(msigdbr)
 library(clusterProfiler)
 library(ggridges)
 library(CellChat)
+source("script/netVisual_diffInteraction_fixed.R")
 
 lacols<-c("LA+"="#8DB600","LA-"="#5E4FA2",none="white")
 domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")

@@ -17,6 +17,8 @@ library(ggridges)
 library(CellChat)
 
 lacols<-c("LA+"="#8DB600","LA-"="#5E4FA2",none="white")
+domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")
+names(domcol)<-6:1
 
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"&
@@ -25,7 +27,7 @@ gc()
 sc$has_LA<-ifelse(sc$LA_per_Sample>0,"LA+","LA-")
 sc@meta.data<-sc@meta.data%>%
   mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
-  mutate(nosub=str_replace(nosub,"Memmo","Memo")%>%str_remove("Early "))
+  mutate(nosub=str_replace(nosub,"Memmo","Memo"))
 
 temp<-read_csv("data/myeloid_subgroups.csv")
 aux_table<-sc@meta.data%>%rownames_to_column("barcode")
@@ -256,10 +258,12 @@ ranks<-split(deg,f = deg$ct)%>%lapply(function(x)
   x%>%add_count(gene)%>%filter(n==1)%>%arrange(desc(avg_log2FC))%>%
     distinct(gene,avg_log2FC)%>%deframe)
 
-gsea_bp<-lapply(ranks,function(x) 
+#set.seed(1234)
+gsea_ori<-lapply(ranks,function(x) 
   gseGO(x,OrgDb = 'org.Hs.eg.db',seed = T,
-        pvalueCutoff = 0.05,minGSSize = 50,
+        pvalueCutoff = 1,minGSSize = 50,
         ont = "BP",keyType = "SYMBOL"))
+gsea_bp<-lapply(gsea_ori,function(x) x%>%filter(p.adjust<0.05))
 gsea_bp<-lapply(gsea_bp,simplify)
 
 gsea_bp<-lapply(names(gsea_bp),function(x)
@@ -322,8 +326,10 @@ pD<-gsea_bp%>%filter(Description%in%j&ct=="B-cells")%>%
     arrange(NES)%>%mutate(Description=factor(Description,
                                              levels = unique(Description)))%>%
     ggplot(aes(x=NES,y=Description,col=NES,size=p.adjust))+geom_point()+
-    scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b")+
-    scale_size(range=c(3,5))+theme_bw()+theme(panel.grid = element_blank())
+    scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b",
+                          limits=c(-2.931469,1.912763),oob=scales::squish)+
+    scale_size(range=c(5,1),limits =c(1,1e-8),breaks=c(1e-8,1e-4,1e-2,1),trans="sqrt")+#to use the same legend with T cells
+  theme_bw()+theme(panel.grid = element_blank())
 
 ```
 
@@ -359,52 +365,60 @@ pairs <- lapply(cc_res[-1],function(x) subsetCommunication(x))
 names(pairs)<-names(cc_res)[-1]
 pairs<-lapply(names(pairs),function(x) 
   pairs[[x]]%>%mutate(has_LA=x))%>%bind_rows()
-temp<-pairs%>%filter(target=="B-cells")
-i<-temp%>%separate_rows(receptor,sep = '_')%>%
-  distinct(receptor)%>%unlist()
 deg<-deg%>%left_join(avgs)
-i<-deg%>%filter(ct=="B-cells"&
-                  gene%in%i&
-                  sign(avg_log2FC)==sign(`LA+`-`LA-`)&
-                  abs(avg_log2FC)>.1)%>%distinct(gene)%>%unlist()
-j<-temp%>%separate_rows(ligand,sep = '_')%>%
-  mutate(gene=ligand,ct=source)%>%distinct(ct,gene)
-j<-j%>%inner_join(deg)%>%filter(abs(avg_log2FC)>.1&
-                                  (`LA+`>.1|`LA-`>.1))
-temp<-temp%>%filter(receptor%in%i&ligand%in%j$gene&
-                      annotation!="ECM-Receptor")
-#alternative pF
-temp1<-netVisual_bubble(cc_res[[1]],
-                        sources.use = temp$source,
-                        targets.use = temp$target,comparison = c(1,2))
-temp1<-temp1$data%>%filter(interaction_name%in%temp$interaction_name)
 
-pF<-temp1%>%
-  mutate(dataset=ifelse(dataset=="TRUE","LA+","LA-"))%>%
+i<-pairs%>%separate_rows(ligand,sep = "_")%>%
+  mutate(ct=source,gene=ligand)%>%distinct(ct,gene)%>%
+  mutate(gene=str_remove(gene,"RA-|Cholesterol-|PGE2-"))
+i<-i%>%inner_join(deg)
+j<-pairs%>%separate_rows(receptor,sep = "_")%>%
+  mutate(ct=target,gene=receptor)%>%distinct(ct,gene)
+j<-j%>%inner_join(deg)
+i<-i%>%filter((`LA-`>1|`LA+`>1)&abs(avg_log2FC)>.1&sign(avg_log2FC)==sign(`LA+`-`LA-`))
+j<-j%>%filter((`LA-`>1|`LA+`>1)&abs(avg_log2FC)>.1&sign(avg_log2FC)==sign(`LA+`-`LA-`))
+temp<-i%>%mutate(source=ct,ligand=gene)%>%select(source,ligand)%>%inner_join(pairs)
+temp<-j%>%mutate(target=ct,receptor=gene)%>%select(target,receptor)%>%inner_join(temp)
+temp<-temp%>%filter(annotation!="ECM-Receptor"&
+                    str_detect(source,"T-|B-|NK|DC|Ma")&
+                    str_detect(target,"T-|B-|NK|DC|Ma"))
+i<-unique(temp$interaction_name_2)
+i<-pairs%>%filter(interaction_name_2%in%i)%>%
+  distinct(interaction_name_2,has_LA)%>%
+  add_count(interaction_name_2)%>%filter(n==1)
+i<-pairs%>%filter(interaction_name_2%in%i$interaction_name)
+
+temp<-netVisual_bubble(cc_res[[1]],
+                        sources.use = i$source,
+                        targets.use = i$target,comparison = c(1,2))
+temp<-temp$data%>%filter(interaction_name%in%i$interaction_name)
+
+pF<-temp%>%arrange(prob)%>%
+  mutate(dataset=ifelse(dataset=="TRUE","LA+","LA-"),
+         group.names=factor(group.names,levels=group.names))%>%
   ggplot(aes(x=dataset,y=group.names,fill=prob))+
   geom_point(shape=21,size=3)+
   facet_wrap(~interaction_name_2,nrow=3,scales="free_y",space="free_y")+
   scale_fill_viridis_c(option = "B",direction = -1,
-                       labels=c("Min","Max"),breaks=c(0.067,0.0815))+
+                       labels=c("Min","Max"),breaks=range(temp$prob))+
   theme_bw()+theme(strip.background = element_blank(),
                    panel.grid = element_blank())+labs(x="",y="")
 ```
 # M1 score
 ```{r}
 m1s<-subset(sc,subset = nosub=="M1 macrophages")
-inflam_genes <- list(c("IL1B", "CXCL8", "PTGS2", "NLRP3", "CCL20",
-                       "PTX3", "TNFAIP3", "NFKBIA", "CEBPB"))
-m1s <- AddModuleScore(m1s,features = inflam_genes,nbin=10)
-colnames(m1s@meta.data)[ncol(m1s@meta.data)]<-"inflam_score"
+m1_genes <- list(
+  "Inflammatory Signaling" = c("TNF","NFKBIA","TNFAIP3","CEBPB"),
+  "Inflammatory Effectors" = c("NLRP3", "IL1B", "PTGS2", "PTX3"),
+  "Recruitment" = c("CXCL8","CCL20","CCL3","CCL4"),
+  "LA Support" = c("ICAM1", "TNFSF13B", "LTA"))
+temp<-DotPlot(m1s,features = m1_genes,group.by = "has_LA") 
 
-pF0<-m1s@meta.data%>%group_by(SampleName,has_LA)%>%
-  summarise(inflam_score=mean(inflam_score))%>%
-  ggplot(aes(x=has_LA,y=inflam_score,col=has_LA))+
-  geom_violin()+geom_boxplot(width=.1)+
-  stat_compare_means(label = "p.signif",
-                     comparisons = list(c("LA+","LA-")))+
-  theme_classic()+scale_color_manual(values=lacols)+
-  labs(x="",y="Inflammation score")+theme(legend.position = "none")
+pF0<-temp$data%>%
+  ggplot(aes(x=id,y=features.plot,col=avg.exp.scaled,size=pct.exp))+
+  geom_point()+facet_wrap(~feature.groups,scales="free_y",space="free_y")+
+  theme_classic()+scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x="",y="",col="z",size="%")+theme(strip.background = element_blank())
+
 ```
 
 # CD40 in B cells
@@ -437,8 +451,6 @@ temp<-temp%>%mutate(index=case_when(dom_nEndoh1_75==6~1,
                                     dom_nEndoh1_75==1~6,
                                     TRUE~dom_nEndoh1_75))#as defined in Fig2
 
-domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")
-names(domcol)<-6:1
 pF1<-temp%>%mutate(Run_Tissue_name=str_remove(cell_ID,"c_.+"))%>%
   group_by(Run_Tissue_name,index)%>%summarise(CD40=mean(CD40))%>%
   ggplot(aes(x=as.factor(index),y=CD40,col=as.factor(index)))+
@@ -473,8 +485,70 @@ temp<-temp%>%t()%>%as.data.frame()%>%rownames_to_column("cell_ID")%>%right_join(
 
 ```
 
-# Interactor functions
+# T functions
 ```{r}
+temp<-deg%>%filter(str_detect(ct,"T-"))%>%filter((`LA+`>1|`LA-`>1)&sign(avg_log2FC)==sign(`LA+`-`LA-`))%>%mutate(status=ifelse(avg_log2FC>0,"LA+","LA-"))
+temp<-gseabp%>%separate_rows(core_enrichment,sep = "/")%>%mutate(gene=core_enrichment)%>%select(gene,ct,Description,NES)%>%inner_join(temp)
+temp<-temp%>%filter(sign(NES)==sign(avg_log2FC))
+temp1<-temp%>%select(Description,gene)%>%table()%>%tcrossprod()
+temp1<-t(temp1)/diag(temp1)
+temp1<-1-temp1
+temp1<-temp1%>%as.dist()%>%hclust(method = "ward.D2")%>%
+  cutree(k = 20)%>%as.data.frame()
+colnames(temp1)<-"cl"
+temp<-temp1%>%rownames_to_column("Description")%>%inner_join(temp)
+i<-temp%>%count(gene,ct,status,avg_log2FC)%>%group_by(ct,status)%>%slice_max(n)%>%slice_max(abs(avg_log2FC))%>%ungroup()%>%select(gene)%>%unlist()
+i[1]<-"NFKBIZ"#changing it for something more interesting from the same ct and status
+i[2]<-"IFNG"#changing it for something more interesting from the same ct and status
+i[i=="BRAF"]<-"CD74"#changing it for something more interesting from the same ct and status
+i<-c(i,"CCL3","CXCR4",#something interesting from temp table
+     "IL4") #because we need to check this marker
+temp%>%filter(gene%in%i)%>%group_by(gene)%>%slice_min(p_val_adj)%>%distinct(gene,status,Description,NES,cl)%>%arrange(gene,NES)%>%view()#hand pick functions from here, trying to avoid same cl functions
+temp1<-c(BAX="T cell apoptotic process",
+     CCL3="positive regulation of cytokine production",
+     CEBPB="regulation of lymphocyte activation",
+     CHMP4A="cytokinetic process",
+     #HIF1A="positive regulation of chemokine production",
+     IFNG="nitric oxide metabolic process",
+     NDUFB8="mitochondrial respiratory chain complex assembly",
+     NFKBIZ="defense response to bacterium",
+     #RGCC="positive regulation of mitotic cell cycle",
+     CD74="regulation of myeloid leukocyte differentiation",
+     TNF="interleukin-6 production",
+#     CXCR4="sensory perception",
+     IL4="B cell proliferation")
+subgseabp<-lapply(names(gsea_ori),function(x)
+    gsea_ori[[x]]%>%as.data.frame()%>%mutate(ct=x))%>%bind_rows()
+subgseabp<-subgseabp%>%filter(Description%in%temp1&str_detect(ct,"T-"))
+
+#source("../../Downloads/radarplot.R")
+temp<-subgseabp%>%complete(Description,ct,fill = list(NES=0,p.adjust=1))
+plots<-lapply(temp1,function(x) 
+  temp%>%filter(Description==x)%>%arrange(NES)%>%mutate(ct=factor(ct,levels=ct))%>%
+  ggplot(aes(x=NES,y=ct,col=NES,size=p.adjust))+geom_point()+scale_size(range=c(5,1),
+                    limits =c(1,1e-8),breaks=c(1e-8,1e-4,1e-2,1),trans="sqrt")+
+    scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b",limits=range(temp$NES))+
+    facet_grid(~Description,scales="free_x")+theme_classic()+
+    theme(strip.background = element_blank()))
+
+temp<-lapply(unique(subgseabp$ct),function(x) 
+  DotPlot(subset(sc,subset = nosub==x),
+          features = names(temp1),group.by = "has_LA")$data%>%
+    mutate(ct=x))%>%bind_rows()
+temp<-temp%>%split(temp$features.plot)
+plotsA<-lapply(names(temp),function(x)
+  temp[[x]]%>%mutate(ct=factor(ct,levels=levels(plots[[x]]$data$ct)))%>%
+  ggplot(aes(x=id,y=ct,col=avg.exp.scaled,size=pct.exp))+
+  geom_point()+facet_grid(~features.plot)+
+  scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  theme_classic()+theme(strip.background = element_blank(),
+                        axis.text.y = element_blank)+
+  labs(x="",y="",col="z",size="%"))
+
+
+
+
+
 #top interactors
 i<-as.data.frame(cc_res$`TRUE`@net$count-cc_res$`FALSE`@net$count)%>%filter(`B-cells`>1)%>%rownames()
 temp<-gsea_bp%>%filter(ct%in%i)%>%separate_rows(core_enrichment,sep = '/')
@@ -483,18 +557,8 @@ i<-deg%>%filter((`LA+`>1|`LA-`>1)&sign(avg_log2FC)==sign(`LA+`-`LA-`))%>%inner_j
 j<-i%>%group_by(ct)%>%slice_max(avg_log2FC,n=10)
 j<-j%>%mutate(core_enrichment=gene)%>%select(core_enrichment,ct)%>%inner_join(temp)
 
-#temp<-gsea_bp%>%filter(ct%in%i)%>%
-  #no Th17 gsea enrichment
-#  separate_rows(core_enrichment,sep = '/')%>%
-#  select(Description,core_enrichment)%>%table()%>%tcrossprod()
-#temp<-t(temp)/diag(temp)
-#temp<-1-temp
-#temp<-temp%>%as.dist()%>%hclust(method = "ward.D2")%>%
-#  cutree(k = 20)%>%as.data.frame()
-#colnames(temp)<-"cl"
-#temp<-temp%>%rownames_to_column("Description")
-#temp<-gsea_bp%>%filter(ct%in%i)%>%
-#  add_count(Description)%>%select(ct,Description,n,NES)%>%inner_join(temp)
+#no Th17 gsea enrichment
+
 
 #chosen from i-linked, high abs(NES)
 i<-c(#"cellular response to interleukin-1",

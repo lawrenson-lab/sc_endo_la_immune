@@ -1,0 +1,1282 @@
+---
+title: "sc_endo_mc"
+author: "Na Jeong Kim"
+date: '2023-05-18'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(broom)
+library(ggplot2)
+library(dplyr)
+library(reshape)
+#library(clusterProfiler)
+library(readxl)
+library(ggrepel)
+library(clustree)
+library(pheatmap)
+#library(sankeyNetwork)
+```
+
+
+```{r}
+imm_cells <- readRDS("data/Immune_Cell_annotation.rds")
+
+all_cells <- readRDS("complete.rds")
+```
+
+```{r}
+#cluster.cols = c("#67001f", "#a50026", "#d73027", "#f46d43", "#fdae61", "#fee090", "#ffffbf", "#a6dba0", "#1a9850", "#e0f3f8", "#abd9e9")
+
+plot_1 <- DimPlot(object = imm_cells, pt.size = 0.1, group.by ="Immune_Cluster_ID", label = T, raster=FALSE) +
+  theme_classic(base_size = 20) ##this is a umap with the clusters grouped with their cell identity
+
+plot_1
+```
+
+```{r}
+# Pull out mast cell population from imm_cells
+mc <- subset(imm_cells, subset = Immune_Cluster_ID %in% "Mast cells")
+
+```
+
+#Number of Mast cells across diff variable
+```{r}
+# Mast cell numbers on surgical classification
+
+prop.cells <- data.frame(table(mc@meta.data$Surgical.classification))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+# Mast cell numbers on Major class
+
+mc@meta.data <- droplevels(mc@meta.data)
+
+prop.cells <- data.frame(table(mc@meta.data$Class))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_classic(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+mc@meta.data <- droplevels(mc@meta.data)
+
+prop.cells <- data.frame(table(mc@meta.data$Class))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_classic(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = "Number of Mast Cells")
+
+# Mast cell numbers of LA status
+
+prop.cells <- data.frame(table(mc@meta.data$LA_Status[mc@meta.data$Class == "Peritoneal endometriosis"]))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+prop.cells <- prop.cells%>%filter(Var1!="NA") #Removing NA in the column
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(y = "Number of Mast Cells",
+       x = "LA status")
+
+# Mast cell numbers of Hormonal States
+
+prop.cells <-  data.frame(table(mc@meta.data$Hormone_status[mc@meta.data$Class == "Peritoneal endometriosis"]))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+  labs(y = "Number of Mast Cells",
+       x = "Hormone status")
+
+# Mast cell numbers of Menstrual Cycle
+
+prop.cells <- data.frame(table(mc@meta.data$Menstral_cycle[mc@meta.data$Class == "Peritoneal endometriosis"]))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+  labs(y = "Number of Mast Cells",
+       x = "Menstral cycle")
+
+# Mast cell numbers of KRAS Mutation
+
+prop.cells <- data.frame(table(mc@meta.data$KRAS_Mut[mc@meta.data$Class == "Peritoneal endometriosis"]))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+  labs(y = "Number of Mast Cells",
+       x = "KRAS Mutation status")
+
+# Mast cell numbers of ARID1A Mutation
+
+prop.cells <- data.frame(table(mc@meta.data$ARID1A_Mut[mc@meta.data$Class == "Peritoneal endometriosis"]))
+prop.cells$Var1 <- factor(prop.cells$Var1, levels = prop.cells$Var1)
+ggplot(prop.cells, aes(Var1, Freq)) +
+  geom_col() +
+  theme_minimal(base_size = 15) +
+  geom_text(aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.25) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+  labs(y = "Number of Mast Cells",
+       x = "ARID1A Mutation status")
+```
+
+#cell proportion (ignore this)
+```{r}
+#cell proportions by LA tissue activity
+
+mc@meta.data <- droplevels(mc@meta.data)
+counts.prop = data.frame(table(mc@meta.data$LA_Status, mc@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+bsize = 20
+p2 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="LA Group", values = c("High" = "#FC8D59",
+                                                    "Low" = "#91BFDB",
+                                                  "Exclude" = "#8B0000",
+                                                  "NA" = "#2F4F4F")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in LA Status') +
+  theme_classic(base_size = 25)
+
+p2
+
+#cell proportions by Class
+
+mc@meta.data <- droplevels(mc@meta.data)
+counts.prop = data.frame(table(mc@meta.data$Class, mc@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+bsize = 20
+p3 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Class", values = c("Endometrioma" = "#7b3294", 
+                      "Eutopic endometrium" = "#c2a5cf", 
+                      "Peritoneal endometriosis" = "#d9f0d3", 
+                      "Unaffected ovary" = "#008837")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Disease Classes') +
+  theme_classic(base_size = 25)
+
+p3
+
+# cell proportions by menstrual cycle phase (mast cells)
+
+
+mc@meta.data <- droplevels(mc@meta.data)
+
+counts.prop = data.frame(table(mc@meta.data$Menstral_cycle, mc@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+p4 <- ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Menstrual cycle", values = c("Follicular" = "orange",
+                                             "Luteal" = "red",
+                                             "Hormone" = "blue")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 25)) +
+  theme(plot.title = element_text(hjust = 0.3),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Menstrual cycle phase')
+
+p4
+```
+
+```{r}
+# cell proportions by menstrual cycle phase (all immune cells)
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data$Menstral_cycle, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+
+p5 <- counts.prop.perc%>%filter(Var2%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Menstrual cycle", values = c("Follicular" = "orange",
+                                             "Luteal" = "red",
+                                             "Hormone" = "blue")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 10)) +
+  theme(plot.title = element_text(hjust = 0.3),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Menstrual cycle phase')
+
+p5
+```
+
+```{r}
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data$KRAS_Mut, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+
+p5.1 <- counts.prop.perc%>%filter(Var2%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_viridis_d() +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 20)) +
+  theme(plot.title = element_text(hjust = 0.3),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "Black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, colour = "Black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in KRAS Mutation Status')
+
+p5.1
+```
+
+#mast cell distribution from all_cells
+```{r}
+.sel.sc = subset(all_cells, subset = Class %in% c("Peritoneal endometriosis"))
+
+prop <- data.frame(table(.sel.sc@meta.data$Immune_Cluster_ID, .sel.sc@meta.data$LA_Status))
+counts.prop.perc = group_by(prop, Var1) %>% mutate(percent = Freq/sum(Freq))
+
+aux = aggregate(prop$Freq, by=list(Category=prop$Var2), FUN=sum)
+aux$Var1 = "Total"
+colnames(aux) <- c("Var2", "Freq", "Var1")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+p1 <- ggplot(counts.prop.perc, aes(x = Var1, y = percent, fill = Var2, label = signif(round(percent, digits = 3), digits = 3))) + 
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  geom_text(position = position_stack(vjust = 0.5), size = 4, color = "#ffffff") +
+  theme_set(theme_gray(base_size = bsize)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.text.y = element_text(angle = 0, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "right")+
+  coord_flip()
+p1
+
+```
+
+
+```{r}
+# cell proportions by LA status (total immune cells and mast cells separately) How do I just look in peritoneal endometriosis?
+# [revised version]**
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = imm_cells@meta.data%>%filter(Class=="Peritoneal endometriosis"&!is.na(LA_Status))%>%count(LA_Status,Immune_Cluster_ID)
+#counts.prop.perc = group_by(counts.prop, Immune_Cluster_ID) %>% mutate(percent = n/sum(n))
+aux = aggregate(counts.prop$n, by=list(Category=counts.prop$LA_Status), FUN=sum)
+aux$Immune_Cluster_ID = "Total"
+colnames(aux) <- c("LA_Status", "n", "Immune_Cluster_ID")
+#aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop), aux)
+
+bsize = 20
+
+p6 <- counts.prop.perc%>%filter(Immune_Cluster_ID%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Immune_Cluster_ID, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = n, fill = LA_Status)) +
+  geom_bar(position="fill",stat = "identity", width=0.8) +
+  scale_fill_manual(name="LA Group", values = c("High" = "#FC8D59",
+                                                    "Low" = "#91BFDB",
+                                                  "Exclude" = "#8B0000",
+                                                  "NA" = "#2F4F4F")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in LA Status') +
+  theme_classic(base_size = 25)
+
+p6
+#data.frame(table(mc@meta.data$KRAS_Mut[mc@meta.data$Class == "Peritoneal endometriosis"]))
+
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data%>%filter(Class == "Peritoneal Endometriosis")$LA_Status, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+
+p6 <- counts.prop.perc%>%filter(Var2%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="LA Group", values = c("High" = "#FC8D59",
+                                                    "Low" = "#91BFDB",
+                                                  "Exclude" = "#8B0000",
+                                                  "NA" = "#2F4F4F")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in LA Status') +
+  theme_classic(base_size = 25)
+
+p6
+
+```
+
+```{r}
+# cell proportions by Hormonal status (total immune cells and mast cells separately)
+
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data$Hormone_status, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+
+bsize = 20
+
+p7 <- counts.prop.perc%>%filter(Var2%in%c("Mast cells","Total"))%>%mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Hormonal States", values = c("No" = "#FC8D59",
+                                                    "Yes" = "#91BFDB")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = 30)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in Hormonal states') +
+  theme_classic(base_size = 25)
+
+p7
+
+```
+
+```{r}
+# cell proportions by Mutation  (total immune cells and mast cells separately)
+
+imm_cells@meta.data <- droplevels(imm_cells@meta.data)
+
+counts.prop = data.frame(table(imm_cells@meta.data$ARID1A_Mut, imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Total"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+bsize = 20
+
+p8 <- counts.prop.perc%>%
+  filter(Var2%in%c("Mast cells","Total"))%>% 
+  mutate(Var3 = factor(Var2, levels = c("Mast cells", "Total")))%>%
+  ggplot(aes(x = Var3, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  # scale_fill_discrete(name="ARID1A Mutation Status")+
+    scale_fill_viridis_d(name="ARID1A Mutation Status")+
+  # scale_fill_manual(name="ARID1A Mutation Status", values = c("Heterogenous" = "red",
+  #                                                   "NP" = "green",
+  #                                                   "NP|Positive" = "blue",
+  #                                                   "Positive" = "orange")) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var3))) +
+  coord_flip() +
+  theme_classic(base_size = 10)+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1, color = "black"),
+        axis.text.y = element_text(angle = 0, hjust = 1, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  ggtitle('Proportion of Mast cells in ARID1A Mutation Status')
+
+p8
+```
+
+```{r}
+# Reproduce p8 with tidyverse style (above)
+plot_df <- imm_cells@meta.data%>% 
+  group_by(ARID1A_Mut, Immune_Cluster_ID) %>%
+  summarise(freq=n()) %>%
+  group_by(ARID1A_Mut)%>%
+  summarise(freq=sum(freq))%>%
+  bind_rows(plot_df)%>%
+  mutate(ARID1A_Mut=replace_na(ARID1A_Mut,"Total"))
+
+view(plot_df)
+
+  mutate(freq,prop= freq/sum(freq)) %>%
+  aggregate(plot_df$freq, by=list(Category=plot_df$ARID1A_Mut))%>%
+  filter(Immune_Cluster_ID %in%c("Total", "Mast cells"))
+
+p9 <- plot_df%>%
+  ggplot(aes(y=Immune_Cluster_ID, x=freq, fill=ARID1A_Mut))+
+  labs(y="ARID1A", x="")+
+  geom_bar(stat="identity", position = "fill")
+
+p9
+
+```
+
+
+```{r}
+# Looking at markers on mast cells in the group of peritoneal endometriosis based on LA status
+
+mc_2 <- subset(mc, subset = Class %in% "Peritoneal endometriosis")
+mc_3 <- subset(mc, subset = Class %in%c("Endometrioma", "Peritoneal endometriosis"))
+
+DotPlot(mc_2, group.by = "LA_Status", features = c("CD69", "LIF", "NAMPT", "NCL")) + 
+  theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.8, hjust = 0.5, color = "black"), axis.text.y = element_text(size = 20, colour = "black")) +
+  coord_flip() +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "LA Status")
+
+```
+
+```{r}
+# Looking at mast cell Markers on mast cell population
+
+DotPlot(mc, group.by = "Class", features = c("KIT","KITLG", "CCL2", "VCAM1", "CPA3", "TPSAB1", "TNF", "FGFR1", "CMA1", "CCR1", "IL1B", "IL3", "ESR1", "ESR2", "PGR", "MCEMP1", "IGHE", "FCER1A", "FGF2", "CCR3")) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+
+# By hormonal state
+
+DotPlot(mc_2, group.by = "Hormone_status", features = c("KIT","KITLG", "CCL2", "VCAM1", "CPA3", "TPSAB1", "TNF", "FGFR1", "CMA1", "CCR1", "IL1B", "IL3", "ESR1", "ESR2", "PGR", "MCEMP1", "IGHE", "FCER1A", "FGF2", "CCR3")) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+# By menstrual cycle
+DotPlot(mc, group.by = "Menstral_cycle", features = c("KIT","KITLG", "CCL2", "VCAM1", "CPA3", "TPSAB1", "TNF", "FGFR1", "CMA1", "CCR1", "IL1B", "IL3", "ESR1", "ESR2", "PGR", "MCEMP1", "IGHE", "FCER1A", "FGF2", "CCR3")) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
+
+#By LA status
+DotPlot(mc_2, group.by = "LA_Status", features = c("KIT","KITLG", "CCL2", "VCAM1", "CPA3", "TPSAB1", "TNF", "FGFR1", "CMA1", "CCR1", "IL1B", "IL3", "ESR1", "ESR2", "PGR", "MCEMP1", "IGHE", "FCER1A", "FGF2", "CCR3")) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+   labs(x = "",
+       y = "")
+```
+
+```{r}
+# Mast cell target markers LA hi vs lo (peritoneal endometriosis)
+
+DotPlot(mc_2, group.by = "LA_Status", features = c("IL4", "IL13", "IL4R", "SIGLEC8", "NFKB1", "PPP3CA", "STAT5A", "STAT5B", "STAT3", "STAT6", "JAK1", "JAK3", "JAK2", "DRD1", "DRD2", "RRARG", "LYN", "FYN", "SYK", "PIK3CB", "PIK3CA", "MTOR", "BTK", "KRAS", "MRGPRX2", "AKT1", "AKT2", "AKT3")) +theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+   labs(x = "",
+       y = "LA Status")
+```
+
+```{r}
+# Mast cell activation markers (receptor/TF)
+
+DotPlot(mc_3, group.by = "Class", features = unique(c("CD27", "CD63", "ENPP3", "CD4", "CD63", "FCER2", "FOXP3", "IL1RL1", "IL2RA", "IL4R", "ITGAX", "KIT", "MYD88", "TLR2", "TLR3", "TLR4", "TLR5", "TLR7", "TLR9"))) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+
+
+#Featurd UMAP
+FeaturePlot(mc, features = unique(c("CD63", "FCER2", "IL1RL1", "IL2RA", "IL4R", "ITGAX", "KIT", "MYD88", "TLR2", "TLR3", "TLR4", "TLR5", "TLR7", "TLR9")))
+
+# Mast cell activation markers (cytokines)
+DotPlot(mc_3, group.by = "Class", features = unique(c("CCL2", "CCL5", "IFNG", "IL10", "IL12B", "IL13", "IL17A", "IL1B", "IL2", "IL3", "IL4", "IL5", "IL6", "TGFB1", "TNF", "TNFSF4", "VEGFA"))) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+
+# Mast cell activation markers (Enzyme/protease)
+
+DotPlot(mc_3, group.by = "Class", features = c("ANPEP", "F2RL1", "TPSAB1", "CMA1")) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+```
+
+
+```{r}
+# Mast cell migration markers 
+DotPlot(mc_3, group.by = "Class", features = unique(c("CCR3", "FCGR3A","FCGR3B", "FCGR2A", "FCGR2B", "FCGR2C", "CD34", "ITGA4"))) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+
+# Mast cell maturation markers 
+DotPlot(mc_3, group.by = "Class", features = unique(c("CPA3", "CXCR2", "FCER1A", "ITGB7"))) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+
+# Mast cell disorder targets
+DotPlot(mc_3, group.by = "Class", features = unique(c("IL2RA", "CD2", "KIT"))) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+```
+
+```{r}
+DotPlot(mc_3, group.by = "Class", features = unique(c("CD63", "IL1RL1","IL4R", "KIT", "TPSAB1", "FCGR3A", "CPA3"))) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+```
+
+```{r}
+vioplot(mc_3)
+vioplot(mc_3, group.by = "Class", features = unique(c("CD63", "IL1RL1","IL4R", "KIT", "TPSAB1", "FCGR3A", "CPA3"))) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+
+```
+
+
+```{r}
+#proportion by patient-specific
+counts.prop = data.frame(table(imm_cells@meta.data$Patient.No., imm_cells@meta.data$Immune_Cluster_ID))
+counts.prop.perc = group_by(counts.prop, Var2) %>% mutate(percent = Freq/sum(Freq))
+head(counts.prop.perc)
+aux = aggregate(counts.prop$Freq, by=list(Category=counts.prop$Var1), FUN=sum)
+aux$Var2 = "Patient"
+colnames(aux) <- c("Var1", "Freq", "Var2")
+aux$percent = aux$Freq / sum(aux$Freq)
+counts.prop.perc = rbind(as.data.frame(counts.prop.perc), aux)
+col = c("#A50026", "#D73027", "#F46D43", "#FDAE61", "#FEE090", "#FFFFBF",
+        "#00441B", "#1B7837", "#5AAE61", "#A6DBA0", "#D9F0D3", "#F7F7F7",
+        "#E0F3F8", "#ABD9E9", "#74ADD1", "#4575B4", "#313695",
+        "#40004B","#762A83", "#9970AB", "#C2A5CF")
+bsize = 20
+ggplot(counts.prop.perc, aes(x = Var2, y = percent, fill = Var1)) +
+  geom_bar(position="stack",stat = "identity", width=0.8) +
+  scale_fill_manual(name="Patient", values = c("1" = col[1],
+                                               "2" = col[2],
+                                               "3" = col[3],
+                                               "4" = col[4],
+                                               "5" = col[5],
+                                               "6" = col[6],
+                                               "7" = col[7],
+                                               "8" = col[8],
+                                               "9"= col[9],
+                                               "10" = col[10],
+                                               "11"= col[11],
+                                               "12" = col[12],
+                                               "13" = col[13],
+                                               "14" = col[14],
+                                               "15" = col[15],
+                                               "16" = col[16],
+                                               "17" = col[17],
+                                               "18" = col[18],
+                                               "19" = col[19],
+                                               "20"= col[20],
+                                               "21" = col[21])) +
+  scale_x_discrete(limits = rev(levels(counts.prop.perc$Var2))) +
+  coord_flip() +
+  theme_set(theme_classic(base_size = bsize)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 270, hjust = 1),
+        axis.text.y = element_text(angle = 0, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())+
+        #legend.position = "none") +
+  ggtitle('Proportion of Immune cells TrueV2 by patient res0.6')
+
+
+
+```
+
+```{r}
+nPatient = table(imm_cells@meta.data$Immune_Cluster_ID, imm_cells@meta.data$Patient.No.)
+nPatient.m = melt(nPatient)
+colnames(nPatient.m) <- c("Var1", "Var2", "value")
+nPatient.m = group_by(nPatient.m, Var1) %>% mutate(percent = value/sum(value))
+ggplot(nPatient.m, aes(Var1, Var2, col = value, fill = value, label = signif(percent, 1))) +
+  geom_tile() +
+  geom_text(col = "black") +
+  theme_minimal(base_size = 16) +
+  scale_y_continuous(name="Patient", breaks=c(1:21)) +
+  scale_x_discrete(name="Clusters", breaks=c("Activated CD8 T-cells (1)",
+                                     "Activated CD8 T-cells (2)",
+                                     "Central Memory CD8 T-cells (1)",
+                                     "Central Memory CD8 T-cells (2)",
+                                     "Central Memory CD8 T-cells (3)",
+                                     "Cytotoxic CD8 T-cells",
+                                     "Effector Memory CD8",
+                                     "Exhausted CD8 T-cells",
+                                     "Th2 T-cells",
+                                     "Th17 T-cells",
+                                     "Bcells",
+                                     "Plasma cells",
+                                     "Macrophages M1",
+                                     "Macrophage M1/M2",
+                                     "Macrophages M2",
+                                     "Mast cells",
+                                     "NK cells")) +
+  coord_flip() +
+   theme(axis.text.x = element_blank(),
+         axis.title.x = element_blank()) +
+  scale_fill_gradient2(low = "white", mid = "white", high = "red") +
+  scale_color_gradient2(low = "white", mid = "white", high = "red")
+```
+
+
+```{r}
+#To find and show the proportion of patients in each cell cluster
+nPatient = table(imm_cells@meta.data$Immune_Cluster_ID, imm_cells@meta.data$Patient.No.)
+nPatient.m = melt(nPatient)
+colnames(nPatient.m) <- c("Var1", "Var2", "value")
+nPatient.m = group_by(nPatient.m, Var1) %>% mutate(percent = value/sum(value))
+ggplot(nPatient.m, aes(Var1, Var2, col = value, fill = value, label = signif(percent, 1))) +
+  geom_tile() +
+  geom_text(col = "black") +
+  theme_minimal(base_size = 16) +
+  scale_y_continuous(name="Patient") +
+  scale_x_continuous(name="Clusters") +
+  coord_flip() +
+   theme(axis.text.x = element_blank(),
+         axis.title.x = element_blank()) +
+  scale_fill_gradient2(low = "white", mid = "white", high = "red") +
+  scale_color_gradient2(low = "white", mid = "white", high = "red")
+```
+
+```{r}
+# mc in PE and endo
+#nPatient = table(imm_cells@meta.data$Class, imm_cells@meta.data$Patient.No.)
+#nPatient.m = melt(nPatient)
+#colnames(nPatient.m) <- c("Var1", "Var2", "value")
+#nPatient.m = group_by(nPatient.m, Var1) %>% mutate(percent = value/sum(value))
+
+d1%>%mutate(Patient.No. = factor(Patient.No., levels = 1:21))%>%
+ggplot(aes(Patient.No.,Class, col = percent, fill = percent, label = signif(percent, 1))) +
+  geom_tile() +
+  geom_text(col = "black") +
+  theme_minimal(base_size = 16) +
+  #scale_y_continuous(name="Patient", breaks=c(1:21)) +
+  #scale_x_discrete(name="Class") +
+  #coord_flip() +
+  #theme(axis.text.x = element_blank()) +
+  scale_fill_gradient2(low = "white", mid = "white", high = "red") +
+  scale_color_gradient2(low = "white", mid = "white", high = "red")
+```
+
+
+```{r}
+# Differential Gene Expression between Peritoneal Endometriosis vs Eutopic Endometrium on mast cells subset
+
+Idents(object = mc) <- mc@meta.data$Major.Class
+
+DEG.res <- FindAllMarkers(mc, test.use = "MAST")
+
+DEG.res2 <- FindMarkers(mc, ident.1 = "Peritoneal Endometriosis", ident.2 = "Eutopic Endometrium", test.use = "MAST")
+
+fc.p = 1.1
+pv.p = 0.05
+DEG.res$STATUS = "NOT.SIG"
+DEG.res[DEG.res$avg_log2FC < -fc.p & DEG.res$p_val_adj < pv.p, ]$STATUS = "Down"
+DEG.res[DEG.res$avg_log2FC > fc.p & DEG.res$p_val_adj < pv.p, ]$STATUS = "Up"
+
+feature = "Surgical"
+c = "Deep"
+
+markers.filt = DEG.res[DEG.res$cluster == c,]
+nDEG = nrow(markers.filt)
+genes = markers.filt$gene[markers.filt$cluster == c & markers.filt$STATUS != "NOT.SIG"]
+
+```
+
+```{r}
+# Differential Gene Expression between Peritoneal Endometriosis vs Eutopic Endometrium on mast cells subset (use)
+
+sel.mc = subset(mc, subset = Class %in% c("Endometrioma",
+                                                    "Peritoneal endometriosis"))
+
+Idents(object = sel.mc) <- sel.mc@meta.data$Class
+
+markers.sel.sc = FindAllMarkers(sel.mc, test.use = "MAST",  verbose = TRUE)
+
+p.v = 0.05
+fc = 0.5
+markers.sel.sc$STATUS = "NOT.SIG"
+markers.sel.sc[markers.sel.sc$avg_log2FC < -fc & markers.sel.sc$p_val_adj < p.v, ]$STATUS = "Down"
+markers.sel.sc[markers.sel.sc$avg_log2FC > fc & markers.sel.sc$p_val_adj < p.v, ]$STATUS = "Up"
+
+features.deg = NULL
+for (o in unique(markers.sel.sc$cluster)) {
+  features.deg = c(features.deg, head(markers.sel.sc$gene[markers.sel.sc$cluster == o  & markers.sel.sc$STATUS == "Up"], 10))
+}
+
+
+pd <- DotPlot(sel.mc, features = unique(features.deg)) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b") +
+  coord_flip() +
+  RotatedAxis()
+pd
+
+# put DEG list into csv
+write_csv(markers.sel.sc,"data/DEG_PE_endometrioma_mc.csv")
+```
+
+
+```{r}
+
+sel.mc = subset(mc, subset = Major.Class %in% "Endometriosis")
+
+Idents(object = sel.mc) <- sel.mc@meta.data$LA_Status
+
+DEG.res <- FindAllMarkers(sel.mc, test.use = "MAST")
+
+p.v = 0.05
+fc = 0.5
+
+DEG.res$STATUS = "NOT.SIG"
+DEG.res[DEG.res$avg_log2FC < -fc & DEG.res$p_val_adj < p.v, ]$STATUS = "Down"
+DEG.res[DEG.res$avg_log2FC > fc & DEG.res$p_val_adj < p.v, ]$STATUS = "Up"
+
+features.deg = NULL
+for (o in unique(DEG.res$cluster)) {
+  features.deg = c(features.deg, head(DEG.res$gene[DEG.res$cluster == o  & DEG.res$STATUS == "Up"], 10))
+}
+
+
+pd <- DotPlot(sel.mc, features = unique(features.deg)) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b") +
+  coord_flip() +
+  RotatedAxis()
+pd
+
+
+```
+
+```{r}
+sel.mc = subset(mc, subset = Class %in% "Peritoneal endometriosis")
+
+Idents(object = sel.mc) <- sel.mc@meta.data$LA_Status
+
+DEG.res <- FindAllMarkers(sel.mc, test.use = "MAST")
+
+p.v = 0.05
+fc = 0.5
+
+DEG.res$STATUS = "NOT.SIG"
+DEG.res[DEG.res$avg_log2FC < -fc & DEG.res$p_val_adj < p.v, ]$STATUS = "Down"
+DEG.res[DEG.res$avg_log2FC > fc & DEG.res$p_val_adj < p.v, ]$STATUS = "Up"
+
+features.deg = NULL
+for (o in unique(DEG.res$cluster)) {
+  features.deg = c(features.deg, head(DEG.res$gene[DEG.res$cluster == o  & DEG.res$STATUS == "Up"], 10))
+}
+
+
+pd <- DotPlot(sel.mc, features = unique(features.deg)) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b") +
+  coord_flip() +
+  RotatedAxis()
+pd
+```
+
+
+```{r}
+# put DEG list into csv
+write_csv(DEG.res,"data/DEG_LA_mc.csv")
+```
+
+```{r}
+# with more mast cell markers (therapeutic targets for mast cells)
+
+DotPlot(mc, group.by = "Class", features = c("IL4", "IL13", "IL4R", "SIGLEC8", "NFKB1", "PPP3CA", "STAT5A", "STAT5B", "STAT3", "STAT6", "JAK1", "JAK3", "JAK2", "DRD1", "DRD2", "RRARG", "LYN", "FYN", "SYK", "PIK3CB", "PIK3CA", "MTOR", "BTK", "KRAS", "MRGPRX2", "AKT1", "AKT2", "AKT3")) +theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+```
+
+```{r}
+library(DOSE)
+gene_names <- c("3248", "3958", "27306", "6257", "2495", "3945", "1192", "5037", "6276", "2207", "7314", "5054", "399687", "1511", "6281", "7076", "7178", "3336", "3329", "3315", "3310")
+
+
+dd1 <- enrichDGN(gene_names)
+
+library(enrichplot)
+barplot(dd1, showCategory = 20)
+
+dd2 <- gseDO(gene_names)
+dotplot(dd1, showCategory=30)
+
+```
+
+
+```{r}
+library(biomaRt)
+library(clusterProfiler)
+library(ReactomePA)
+```
+
+```{r}
+#translate gene names to entrez ids
+
+ensembl <- useEnsembl(biomart = "genes", dataset = "")
+bm <- getBM(attributes = c('entrezgene_id', 'external_gene_name'), mart = ensembl)
+#separate up from down regulated genes
+deg<-deg%>%left_joing(bm,byc("gene"="external_gene_name"))%>%
+  mutate(cluster=paste(cluster,STATUS))
+#keep only signficantly altered genes
+deg.targ<-deg%>%filter(STATUS!="NOT.SIG")
+
+#list gene ids
+genes<-deg.targ%>%group_by(cluster)%>%group_map(~.x$entrezgene_id)
+names(genes)<-deg.targ%>%group_by(cluster)%>%group_keys()%>%unlist()
+#enrichment
+pathways<-compareCluster(genes,fun="enrichPathway",pvalueCutoff=0.05)%>%
+  as.data.frame()}
+
+#dotplot
+pathways<-pathways%>%
+    mutate(GenePerCent=as.numeric(str_remove(GeneRatio,".+/")))%>%
+    mutate(GenePerCent=100*Count/GenePerCent)%>%
+    mutate(Class=str_remove(Cluster," .+$"))%>%
+    mutate(Change=str_remove(Cluster,"^.+ "))
+pathways%>%ggplot(aes(x=Class,y=Description))+
+    geom_point(aes(size=GenePerCent,color=p.adjust,fill=p.adjust,shape=Change))+
+    theme_classic(base_size = 16)+ylab("")+xlab("")+labs(size="%")+
+    scale_fill_gradient(high = "#00B519",low = "yellow")+
+    scale_color_gradient(high = "#00B519",low = "yellow")+
+    scale_shape_manual(values=25:24)+guides(color=F)+
+    theme(axis.text.x = element_text(angle=90))
+```
+
+
+```{r}
+# violin plot 
+```
+
+```{r}
+# Load the required libraries
+install.packages("patchwork")
+library(patchwork)
+library(CellChat)
+
+# Load CellChat object 
+
+cellchat_LA <- readRDS("/media/speed/share/CellChat_endo_LA_redo.rds")
+object.list <- cellchat_LA[-1]
+cellchat_LA <- cellchat_LA[[1]]
+# peri_endo = subset(cellchat_mc, subset = Class %in% "Peritoneal endometriosis")
+# endo = subset(cellchat_mc, subset = Class %in% "Endometrioma")
+# object.list <- list(PE = peri_endo, EM = endo)
+# cellchat <- mergeCellChat(object.list, add.names = names(object.list))
+
+```
+
+```{r}
+# new version of cell chat analysis
+
+cellchat <- readRDS("data/CellChat_endo_LA_final.rds")
+
+object.list <- cellchat[-1]
+cellchat <- cellchat[[1]]
+
+cellchat_class <- readRDS("data/CellChat_endo_class.rds")
+object.list <- cellchat_class[-1]
+cellchat_class <- cellchat_class[[1]]
+
+```
+
+
+```{r}
+DotPlot(mc_2, group.by = "LA_Status", features = unique(c("CD55", "INSR", "ADGRE5", "NAMPT"))) +theme_classic(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust = 0.5, size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black")) +
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  labs(x = "",
+       y = "")
+```
+
+
+```{r}
+# Part 1: Predict genera principles of cell-cell communication among different biological conditions -> can answer questions: 1) whether the cell-cell communication is enhanced or not 2) interaction between which cell types is significantly changed 3) how major sources and targets change from one condition to another
+
+##1.1: compare the total number of interactions and interaction strength
+
+
+fig1_1 <- compareInteractions(cellchat_class, show.legend = F, group = c(1,2), measure = "weight")
+fig1_2 <- compareInteractions(cellchat_class, show.legend = F, group = c(1,2))
+
+fig1_1 + fig1_2
+```
+
+```{r}
+# Compare the number of interactions and strength among different cell populations
+
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_diffInteraction(cellchat_class, weight.scale = T)
+netVisual_diffInteraction(cellchat_class, weight.scale = T, measure = "weight")
+```
+
+```{r}
+# Heatmap of incoming and outgoing signaling
+
+gg1 <- netVisual_heatmap(cellchat_class) # do heat map on merged object
+gg2 <- netVisual_heatmap(cellchat_class, measure = "weight")
+gg1 +gg2
+```
+
+```{r}
+# can identify the specific signaling changes of mast cells between endometrioma and peritoneal endometriosis
+gg1 <- netAnalysis_signalingChanges_scatter(cellchat, idents.use = "Mast cells")
+patchwork::wrap_plots(plots = list(gg1))
+
+# compare the overall information flow of each signaling pathway
+gg1 <- rankNet(cellchat_class, mode = "comparison", stacked = T, do.stat = TRUE)
+gg2 <- rankNet(cellchat_class, mode = "comparison", stacked = F, do.stat = TRUE)
+gg1 + gg2
+```
+
+
+```{r}
+# Identify the upgreulated and down-regulated signaling ligand-receptor pairs
+## identify dysfunctional signaling by comparing the communication prbabities
+
+netVisual_bubble(cellchat_class, sources.use = 4, targets.use = c(5:11),  comparison = c(1, 2), thresh = 0.5, grid.on =TRUE , angle.x = 45)
+
+gg1 <- netVisual_bubble(cellchat_class, sources.use = "Mast cells", targets.use = c(5:11),  comparison = c(1, 2), max.dataset = 2, title.name = "Increased signaling", angle.x = 45, remove.isolate = T)
+#> Comparing communications on a merged object
+gg2 <- netVisual_bubble(cellchat_class, sources.use = "Mast cells", targets.use = c(5:11),  comparison = c(1, 2), max.dataset = 1, title.name = "Decreased signaling in LS", angle.x = 45, remove.isolate = T)
+#> Comparing communications on a merged object
+gg1 + gg2
+
+# doing the same thing by using differential expression analysis
+pos.dataset = "Peritoneal endometriosis"
+features.name = pos.dataset
+cellchat_class <- identifyOverExpressedGenes(cellchat_class, group.dataset = "datasets", pos.dataset = "Peritoneal endometriosis", features.name = features.name, only.pos = FALSE, thresh.pc = 0.1, thresh.fc = 0.1, thresh.p = 1)
+
+net <- netMappingDEG(cellchat_class, features.name = features.name)
+# extract the ligand-receptor pairs with upregulated ligands in Endometrioma
+net.up <- subsetCommunication(cellchat_class, net = net, datasets = "Endometrioma",ligand.logFC = 0.2, receptor.logFC = NULL)
+# extract the ligand-receptor pairs with upregulated ligands and upregulated recetptors in NL, i.e.,downregulated in LS
+net.down <- subsetCommunication(cellchat_class, net = net, datasets = "Peritoneal endometriosis",ligand.logFC = -0.1, receptor.logFC = -0.1)
+
+gene.up <- extractGeneSubsetFromPair(net.up, cellchat_class)
+gene.down <- extractGeneSubsetFromPair(net.down, cellchat_class)
+
+#visualize ligand-receptor pairs using bubble plot
+pairLR.use.up = net.up[, "interaction_name", drop = F]
+gg1 <- netVisual_bubble(cellchat_class, pairLR.use = pairLR.use.up, sources.use = "Mast cells", targets.use = c(5:11), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+#> Comparing communications on a merged object
+pairLR.use.down = net.down[, "interaction_name", drop = F]
+gg2 <- netVisual_bubble(cellchat_class, pairLR.use = pairLR.use.down, sources.use = "Mast cells", targets.use = c(5:11), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Down-regulated signaling in ", names(object.list)[2]))
+#> Comparing communications on a merged object
+gg1 + gg2
+
+#visualize using Chord diagram
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_chord_gene(object.list[[2]], sources.use = "Mast cells", targets.use = c(5:11), slot.name = 'net', net = net.up, lab.cex = 0.8, small.gap = 3.5, title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_chord_gene(object.list[[1]], sources.use = "Mast cells", targets.use = c(5:11), slot.name = 'net', net = net.down, lab.cex = 0.8, small.gap = 3.5, title.name = paste0("Down-regulated signaling in ", names(object.list)[2]))
+```
+
+```{r}
+# visually compare cell-cell communication 
+for (i in 1:length(object.list)) {
+  netVisual_chord_gene(object.list[[i]], sources.use = "Mast cells", targets.use = c(5:8), lab.cex = 0.5, title.name = paste0("Signaling from Mast cells - ", names(object.list)[i]))
+}
+```
+
+
+```{r}
+#Differential network analysis works for pairwise datasets. If there are more datasets for comparison 
+##To compute the maximum number of cells per cell group and the maximum number of interactions across all datasets
+
+weight.max <- getMaxWeight(object.list, attribute = c("idents","count"))
+par(mfrow = c(1,2), xpd=TRUE)
+for (i in 1:length(object.list)) {
+  netVisual_circle(object.list[[i]]@net$count, weight.scale = T, label.edge= F, edge.weight.max = weight.max[2], edge.width.max = 12, title.name = paste0("Number of interactions - ", names(object.list)[i]))
+}
+```
+
+```{r}
+#Compare the major sources and targets in 2D space
+##this would allow ready identification of the cell populations with significant changes in sending or recieving signals between different datasets.
+num.link <- sapply(object.list, function(x) {rowSums(x@net$count) + colSums(x@net$count)-diag(x@net$count)})
+weight.MinMax <- c(min(num.link), max(num.link)) # control the dot size in the different datasets
+gg <- list()
+for (i in 1:length(object.list)) {
+  gg[[i]] <- netAnalysis_signalingRole_scatter(object.list[[i]], title = names(object.list)[i], weight.MinMax = weight.MinMax)
+}
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+patchwork::wrap_plots(plots = gg)
+```
+
+
+```{r}
+gg1 <- rankNet(cellchat_class, mode = "comparison", stacked = T, do.stat = TRUE)
+gg2 <- rankNet(cellchat_class, mode = "comparison", stacked = F, do.stat = TRUE)
+gg1 + gg2
+#Identify signaling groups based on structure similarity
+cellchat_LA <- computeNetSimilarityPairwise(cellchat_LA, type = "structural")
+#> Compute signaling network similarity for datasets 1 2
+cellchat <- netEmbedding(cellchat, type = "structural")
+#> Manifold learning of the signaling networks for datasets 1 2
+cellchat <- netClustering(cellchat, type = "structural")
+#> Classification learning of the signaling networks for datasets 1 2
+# Visualization in 2D-space
+netVisual_embeddingPairwise(cellchat, type = "structural", label.size = 3.5)
+#> 2D visualization of signaling networks from datasets 1 2
+```
+
+
+```{r}
+# Calculate the aggregated cell-cell communication network
+
+groupSize <- as.numeric(table(cellchat_LA@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat_LA@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+netVisual_circle(cellchat_LA@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+```
+
+
+```{r}
+# Visualize each signaling pathway using Hierarchy plot, Circle plot or Chord diagram
+
+# Hierarchy plot
+pathways.show <- c("CXCL") 
+weight.max <- getMaxWeight(object.list, slot.name = c("netP"), attribute = pathways.show) # control the edge weights across different datasets
+vertex.receiver = seq(1,10)
+# Left portion of hierarchy plot the shows signaling to dermal cells and right portion shows signaling to epidermal cells
+par(mfrow = c(1,2), xpd=TRUE)
+for (i in 1:length(object.list)) {
+  netVisual_aggregate(object.list[[i]], signaling = pathways.show, vertex.receiver = vertex.receiver, edge.weight.max = weight.max[1], edge.width.max = 10, signaling.name = paste(pathways.show, names(object.list)[i]))
+}
+
+netVisual_bubble(cellchat_LA, sources.use = 4, targets.use = c(5:11), remove.isolate = FALSE)
+
+cellchat_LA <- computeCommunProbPathway(cellchat_LA)
+pathways.show <- c("CXCL")
+netVisual_aggregate(cellchat_LA, signaling = pathways.show)
+netAnalysis_contribution(cellchat_LA, signaling = pathways.show)
+```
+
+```{r}
+# define a positive dataset, i.e., the dataset with positive fold change against the other dataset
+pos_dataset = "Peritoneal endometriosis"
+base_dataset= "Endometrioma"
+
+# define a char name used for storing the results of differential expression analysis
+features_name = pos_dataset
+# perform differential expression analysis
+cellchat_class <- identifyOverExpressedGenes(cellchat_class, group.dataset = "datasets", pos.dataset = "Peritoneal endometriosis", features.name = features_name, only.pos = FALSE, thresh.pc = 0.1, thresh.fc = 0.1, thresh.p = 1)
+#> Use the joint cell labels from the merged cell_chat_data object
+# map the results of differential expression analysis onto the inferred cell-cell communications to easily manage/subset the ligand-receptor pairs of interest
+net <- netMappingDEG(cellchat_class, features.name = features_name)
+# extract the ligand-receptor pairs with upregulated ligands in LS
+net_up <- subsetCommunication(cellchat_class, net = net, sources.use = "Mast cells", datasets = pos_dataset,ligand.logFC = 0.2, receptor.logFC = NULL)
+# extract the ligand-receptor pairs with upregulated ligands and upregulated recetptors in NL, i.e.,downregulated in LS
+net_down <- subsetCommunication(cellchat_class, net = net, datasets = base_dataset,ligand.logFC = -0.1, receptor.logFC = -0.1)
+#write_csv(net,"data/cell_chat_endo_DE_pairs.csv")
+```
+
+## Interaction Summary Stat
+
+```{r}
+ggplot(net, aes(x=prob)) + geom_dotplot( binwidth=0.0001) + theme_minimal()
+
+net_ineraction <- net %>% 
+                  mutate(prob=cut(prob,breaks=10) %>% str_wrap()) 
+
+ggplot(net_ineraction %>% count(source,prob), aes(y=source,x=prob,size=n)) + 
+         geom_point() + labs(y="",x="Interaction strength") + 
+         theme_minimal()
+
+ggplot(net_ineraction %>% count(source,prob,datasets) , aes(y=source,x=prob,size=n)) + 
+         geom_point() + labs(y="",x="Interaction strength") + 
+         theme_minimal() +
+         theme(axis.text.x = element_text(angle = -45,vjust=-0.05,hjust=0.5))+
+         facet_wrap(~datasets)
+```
+
+```{r}
+
+net_summary_table <- net %>% 
+                      count(source,datasets) %>% 
+                      complete(source,datasets,fill= list(n=0))
+
+net_summary_fig_1 <- net_summary_table %>%
+                    group_by(source) %>% 
+                    summarise( dif= n[1]-n[2]) %>% 
+                    mutate( enrich=if_else( dif >0, "Endometrioma", "Peritoneal endometriosis") ) %>%
+                    ggplot(.,aes(y=source,x=dif, fill=enrich)) +
+                      geom_bar(stat="identity") +
+                      labs(x="Difference in # interaction",y="") +
+                      theme_minimal()
+net_summary_table <- net %>% 
+                      group_by(source,datasets) %>% 
+                      summarise(t=sum(prob)) %>% 
+                      ungroup %>%
+                      complete(source,datasets,fill= list(t=0))
+
+net_summary_fig_2 <- net_summary_table %>% 
+                      group_by(source) %>% 
+                      summarise(dif=t[1]-t[2]) %>%
+                      mutate( enrich=if_else( dif >0, "Endometrioma", "Peritoneal endometriosis") ) %>%
+                      ggplot(.,aes(y=source,x=dif, fill=enrich)) +
+                        geom_bar(stat="identity") +
+                        labs(x="Difference in interaction strength",y="") +
+                        theme_minimal()
+
+
+```
+
+```{r}
+sender <- c("EnEpi cells","EnS cells","Smooth muscle cells","Mesenchymal cells","Endothelial cells") 
+immune_subset <- c("Central Memory CD8 T-cells (2)", "Th17 T-cells", "NK cells", "Bcells", "Activated CD8 T-cells (2)", "Plasma cells", "Mast cells" , "Macrophages M1") 
+
+gg1 <- netVisual_heatmap(cell_chat_data, sources.use = sender, targets.use = immune_subset , remove.isolate = TRUE)
+gg2 <- netVisual_heatmap(cell_chat_data, sources.use = sender, targets.use = immune_subset,measure = "weight", remove.isolate = TRUE )
+
+gg1+gg2
+```
+
+
+```{r}
+par(mfrow = c(1,2), xpd=TRUE)
+
+netVisual_chord_gene(object.list[[1]], sources.use = "Mast cells", slot.name = 'net', net = net_down, lab.cex = 0.8, small.gap = 3.5, title.name = paste0("Up-regulated signaling in ", names(object.list)[1]))
+
+netVisual_chord_gene(object.list[[2]], sources.use = "Mast cells", slot.name = 'net', net = net_up, lab.cex = 0.5, small.gap = 3.5, title.name = paste0("up-regulated signaling in ", names(object.list)[2]))
+```
+
+
+```{r}
+gene_up <- extractGeneSubsetFromPair(net_up, cell_chat_data)
+gene_down <- extractGeneSubsetFromPair(net_down, cell_chat_data)
+
+pairLR_use_up = net_up[, "interaction_name", drop = F]
+# 14 is Exhausted CD8 T-cells
+gg1 <- netVisual_bubble(cell_chat_data, pairLR.use = pairLR_use_down, sources.use = 14, comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[1]))
+#> Comparing communications on a merged object
+pairLR_use_down = net_down[, "interaction_name", drop = F]
+gg2 <- netVisual_bubble(cell_chat_data, pairLR.use = pairLR_use_up, sources.use = 14, comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Down-regulated signaling in ", names(object.list)[1]))
+#> Comparing communications on a merged object
+gg1 + gg2
+```
+
+```{r}
+
+```
+

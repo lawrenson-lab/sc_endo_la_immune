@@ -129,7 +129,7 @@ domDEG%>%filter(gene%in%i$gene)%>%
 
 ```
 
-# Example space plots: squidpy
+# Example space plots: notebook/cosmx_squidpy.ipynb
 
 # Cell composition contrast
 ```{r echo=TRUE, message=FALSE, warning=FALSE}

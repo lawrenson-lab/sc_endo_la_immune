@@ -3,13 +3,18 @@ title: "Dataset introduction"
 ---
 
 
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(cowplot)
 library(ggplot2)
 library(ComplexHeatmap)
 library(circlize)
 library(ggpubr)
+library(limma)
+library(speckle)
+library(Seurat)
+library(CellChat)
+library(ggrepel)
 library(ggnewscale)
 source("script/netVisual_diffInteraction_fixed.R")
 
@@ -31,7 +36,8 @@ names(cellcols)<-c("B cells","Plasma cells","CD4 T cells","CD8 T cells",
 
 ```
 # Filter/QC
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
 temp<-metadata%>%group_by(Run_Tissue_name)%>%
   summarise(thres=quantile(nCount_RNA,c(0.05)))
 metadata<-metadata%>%left_join(temp)
@@ -52,15 +58,15 @@ metadata<-metadata%>%
 metadata<-metadata%>%filter(!fov_type%in%c("low_signal","unknown"))
 ```
 # Cell type markers
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 markers<-read_tsv("cosmx_markers.tsv")
 markers<-markers%>%separate_rows(Positive,sep = ",")%>%
   distinct(Positive)%>%unlist()
 markers<-markers[c(2,1,5,4,8,7,9,12,10,16,18,3,19,22,23)]
 
-pe<-vroom::vroom("/media/Lawrenson_Lab_NAS/uthscsa/group_data/CosMx_temp/PE.csv")%>%
+pe<-vroom::vroom("PE.csv")%>%
   filter(cell_ID%in%metadata$cell_ID)
-mat<-vroom::vroom("/media/Lawrenson_Lab_NAS/uthscsa/group_data/CosMx_temp/endometrium.csv")%>%filter(cell_ID%in%metadata$cell_ID)
+mat<-vroom::vroom("endometrium.csv")%>%filter(cell_ID%in%metadata$cell_ID)
 mat<-mat%>%bind_rows(pe)%>%column_to_rownames("cell_ID")%>%t()
 negavg<-colMeans(mat[c("Ms IgG1","Rb IgG"),])
 normi<-t(t(mat)-negavg)
@@ -102,10 +108,7 @@ plot_grid(pC+theme(legend.position = "left"),pC1,
 ```
 
 #   Cell composition contrast
-```{r}
-library(limma)
-library(speckle)
-
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 temp<-metadata%>%distinct(Class,Run_Tissue_name)
 props<-getTransformedProps(metadata$fov_type,
                            metadata$Run_Tissue_name)
@@ -120,8 +123,6 @@ res<-topTable(fit,number = nrow(props),coef = 1)
 res<-res%>%rownames_to_column("cell_type")
 
 ## scRNA
-library(Seurat)
-
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 sc<-subset(sc,cells = which(sc$Class%in%c("Eutopic endometrium","Peritoneal endometriosis")&
                             str_detect(sc$harmonized_major_plus_immune_cell_type,
@@ -135,7 +136,7 @@ sc@meta.data<-sc@meta.data%>%
                             TRUE~harmonized_major_cell_type))
 sc@meta.data<-sc@meta.data%>%
   mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
-  mutate(nosub=str_replace(nosub,"Memmo","Memo")%>%str_remove("Early "))
+  mutate(nosub=str_replace(nosub,"Memmo","Memo"))
 temp<-read_csv("data/myeloid_subgroups.csv")
 aux_table<-sc@meta.data%>%rownames_to_column("barcode")
 aux_table<-temp%>%select(barcode,myeloid_cl)%>%
@@ -174,7 +175,7 @@ pE<-temp%>%ggplot(aes(x=RNA_LFC,y=CosMx_LFC,size=max_P))+
 
 temp<-metadata%>%count(Class,fov_type,name = "CosMx_n")%>%
   mutate(celltype=fov_type)%>%select(-fov_type)
-temp<-aux%>%count(Class,celltype,name = "RNA_n")%>%inner_join(temp)%>%
+temp<-aux_table%>%count(Class,celltype,name = "RNA_n")%>%inner_join(temp)%>%
   pivot_longer(RNA_n:CosMx_n,names_to = "platform",values_to = "n")
 temp<-temp%>%group_by(Class,platform)%>%
   summarise(n=sum(n),celltype="Total")%>%bind_rows(temp)
@@ -188,8 +189,9 @@ pE1<-temp%>%mutate(celltype=factor(celltype,
   labs(x="Proportion")
 plot_grid(pE,pE1,rel_widths = c(.4,.6))
 ```
+
 # RNA difference
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 alt_cellcols<-CellChat::scPalette(length(unique(aux_table$nosub)))
 #alt_cellcols<-grDevices::colorRampPalette(alt_cellcols)(30)
 names(alt_cellcols)<-sort(unique(aux_table$nosub))
@@ -197,7 +199,7 @@ alt_cellcols["B-cells"]<-cellcols["B cells"]
 alt_cellcols["Plasmablast/Plasma cells"]<-cellcols["Plasma cells"]
 
 temp<-aux_table%>%distinct(Class,SampleName)
-props<-getTransformedProps(aux_table$celltype,
+props<-getTransformedProps(aux_table$nosub,
                            aux_table$SampleName)
 props<-props$TransformedProps[,temp$SampleName]
 designM<-model.matrix(~0+Class,data=temp)#groups around replicates=samplename
@@ -231,9 +233,11 @@ pF0<-temp%>%ggplot(aes(x=n,y=nosub,fill=nosub))+geom_col()+
   scale_fill_manual(values=alt_cellcols)+theme_classic()+
   theme(legend.position = "n")+
   labs(x="Total cells",y="Cell type")+scale_x_log10()
+plot_grid(pF,pF0+theme(axis.text.y = element_blank(),axis.ticks.y =element_blank(),plot.margin=grid::unit(c(0,0,0,-10), "mm")),rel_widths = c(.7,.3),align = "h",axis = "tb")
 ```
+
 ## Subsets 
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 tcells<-subset(sc,cells=which(str_detect(sc$celltype,"T cells")))
 tcells<-RunUMAP(tcells,repulsion.strength = 5,dims = 1:15)
 tcoords<-tcells@reductions$umap@cell.embeddings%>%as.data.frame()%>%
@@ -243,7 +247,7 @@ nont<-subset(sc,cells = which(str_detect(sc$celltype,"B|Mast|NK|Plas|My")))
 nont<-RunUMAP(nont,dims = 1:15)
 nontcoords<-nont@reductions$umap@cell.embeddings%>%
   as.data.frame()%>%rownames_to_column("barcode")
-nontcoors%>%write_csv("RNA_nonTcells_umap.csv")
+nontcoords%>%write_csv("RNA_nonTcells_umap.csv")
 sc<-subset(sc,subset=celltype%in%c("Stroma","Epithelial"))
 sc<-RunUMAP(sc,dims = 1:15)
 nonimmcoords<-sc@reductions$umap@cell.embeddings%>%
@@ -306,12 +310,12 @@ pF3<-pF1$data %>%
     theme(strip.background = element_blank(),
           panel.grid = element_blank(),
           legend.position = "n")+labs(x="UMAP 1")
+plot_grid(pF1,pF2,pF3,nrow=3,align='v',axis="lr",rel_heights = c(.35,.65))
 
 ```
+
 # CellChat
-```{r}
-library(CellChat)
-library(ggrepel)
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 
 #names(alt_cellcols)<-sort(unique(aux_table$harmonized_major_plus_immune_cell_type))
 
@@ -328,8 +332,10 @@ temp<-lapply(names(temp), function(x)
   temp[[x]]%>%as.data.frame()%>%mutate(Class=x)%>%
     rownames_to_column("ct"))%>%bind_rows()
 colnames(temp)[2]<-"total_interactions"
+temp<-temp%>%filter(ct!="Myeloid cells")%>%
+  mutate(ct=str_replace(ct,"Memmo","Memo")%>%str_replace("Exha","Early Exha"))
 
-pG<-temp%>%filter(ct!="Myeloid cells")%>%
+pG<-temp%>%
     mutate(ct=factor(ct,levels=levels(pF0$data$nosub)))%>%
     ggplot(aes(y=ct,x=total_interactions,fill=Class))+
     geom_bar(stat="identity",position="fill")+
@@ -340,7 +346,6 @@ pG<-temp%>%filter(ct!="Myeloid cells")%>%
     labs(y="",x="Interaction proportion")
 pG1<-temp%>%group_by(ct)%>%
   summarise(total_interactions=sum(total_interactions))%>%
-  mutate(ct=str_replace(ct,"Memmory","Memory"))%>%
   mutate(ct=factor(ct,levels=levels(pG$data$ct)))%>%
   ggplot(aes(x=total_interactions,y=ct,fill=ct))+geom_col()+
   scale_fill_manual(values=alt_cellcols)+theme_classic()+
@@ -348,6 +353,7 @@ pG1<-temp%>%group_by(ct)%>%
         axis.ticks.y=element_blank(),
         plot.margin=grid::unit(c(0,0,0,-3), "mm"))+
   labs(x="",y="")
+plot_grid(pG,pG1+theme(axis.text.y = element_blank(),axis.ticks.y =element_blank(),plot.margin=grid::unit(c(0,0,0,-10), "mm")),rel_widths = c(.7,.3),align = "h",axis = "tb")
 
 cts<-unique(temp$ct)
 #netVisual_diffInteraction() not working
@@ -375,71 +381,3 @@ pH3<-netVisual_diffInteraction(cc_res[[1]],
                               remove.isolate = T)
 
 ```
-# CosMx neighbors
-```{r}
-temp<-edges%>%count(Class,type_to,type_from)
-p0<-temp%>%filter(type_to==type_from&type_to!="")%>%
-  ggplot(aes(x=Class,y=n,col=type_from,group=type_from))+
-  geom_point()+geom_line()+
-  scale_color_manual(values = cellcols)+scale_y_log10()+
-  theme_light()+ggtitle("Homotypic interactions change")+
-  theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))
-  labs(y="Interactions",col="",x="")
-
-temp<-temp%>%filter(type_to!=""&type_from!="")%>%
-  pivot_wider(names_from = type_to,values_from = n)%>%
-  mutate(across(3:11,function(x) replace_na(x,0)))
-temp1<-split(temp,f = temp$Class)%>%lapply(function(x) 
-  x%>%mutate(across(3:11,function(y) 
-    100*y/sum(y))))
-cl<-temp1$`Eutopic endometrium`%>%select(-c(1,2))%>%t()%>%dist()%>%hclust(method = "complete")
-temp1<-temp1%>%bind_rows()
-temp1<-temp1[c(cl$order,9+cl$order),]
-hm<-temp1%>%select(-c(1,2))%>%t()%>%
-  Heatmap(name="%",column_split=temp1$Class,column_labels = temp1$type_from,
-          col=colorRamp2(c(60,40,15,5,1,0),
-                         c("#14081D","#651B79","#de7065ff","#FFC28B","#FCFDBF","white")),
-          cluster_columns = cl,show_row_dend = F,row_names_side = "left",
-          show_heatmap_legend = T,column_names_rot = 45)
-hm<-grid.grabExpr(draw(hm))
-
-plot_grid(hm,p0,align = "h",axis = "tb")
-
-
-#partA<-plot_grid(pC+theme(axis.text = element_text(size=10),legend.position = "left",plot.margin=grid::unit(c(1,10,0,-3), "mm")),pC1+theme(axis.text = element_text(size=10),plot.margin=grid::unit(c(0,0,0,-15), "mm")),align="h",axis="tb",rel_widths = c(.8,.2),labels=c('B',''))
-#partB<-plot_grid(pE+theme(axis.text = element_text(size=10)),pE1+theme(axis.text = element_text(size=10)),align="h",axis="tb",labels=c('C','D'))
-#partA<-plot_grid(partA,partB,nrow = 2,rel_heights = c(.4,.6))
-#partB<-plot_grid(pF1,pF2,nrow=2,align='v',axis="lr",rel_heights = c(.35,.65))
-#partC<-plot_grid(pF,pG+theme(axis.text.y = element_blank(),axis.ticks.y =element_blank(),plot.margin=grid::unit(c(0,0,0,-10), "mm")),rel_widths = c(.7,.3),align = "h",axis = "tb")
-#partC<-plot_grid(partC,NULL,nrow=2,rel_heights = c(.6,.4))
-pdf("temp.pdf",width = 13,height = 11)
-plot_grid(plot_grid(NULL,partA),plot_grid(partB,partC,rel_widths = c(.6,.4)),nrow=2)
-dev.off()
-
-save(hm0,p1,lgd0,pB,pB1,pC,pC1,pE,pH1,pI,
-     p0,file="docs/Fig1.RData")
-
-```
-
-#supplementary Fig
-```{r}
-markers <- list(
-#  "Myeloid" = c("CD68", "ITGAM", "CD14", "CD33", "CSF1R", "AIF1"),
-  "Myeloid" = c("CD68", "CD33"),
-  "M1" = c("IL1B","TNF","CXCL8","CXCL10"),
-  "M2" = c("MRC1","CD163","FOLR2","CCL18"),
-  "MDSC" = c("FCGR2A","S100A8","S100A9","FUT4","OLR1","FCN1","PTGS2", "VCAN", "LYZ", "FCGR3B", "CEACAM8", "CXCR2"),
-  "Resident" = c("C1QA","C1QB","C1QC","SELENOP"),
-  "APC" = c("HLA-DRA","CD74","FCER1A","CLEC10A"))
-
-Idents(sub_myeloid)<-"myeloid_cl"
-DotPlot(
-    subset(sub_myeloid,idents = "undefined myeloid", invert = TRUE),
-    features = markers,
-    group.by = "myeloid_cl") +
-    RotatedAxis()+
-    theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+
-    scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")
-```
-
-

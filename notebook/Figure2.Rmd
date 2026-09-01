@@ -1,7 +1,7 @@
 ---
 title: "Fig 2"
 ---
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(cowplot)
 library(ComplexHeatmap)
@@ -12,6 +12,7 @@ library(speckle)
 library(limma)
 library(ggridges)
 library(dbscan)
+library(Seurat)
 
 domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")
 names(domcol)<-6:1
@@ -33,51 +34,8 @@ i<-metadata%>%distinct(Run_Tissue_name,dom_nEndoh1_75)%>%
 metadata<-metadata%>%filter(dom_nEndoh1_75!=i&!fov_type%in%c("unknown","low_signal"))
 ```
 
-# Supplementary heatmap
-```{r}
-files<-list.files("data",full.names = T)
-files<-files[str_detect(files,"bg")][-1]#no endometrioma
-metadata<-lapply(files,vroom::vroom)%>%bind_rows()
-gc()
-
-mat<-vroom::vroom("endometrium.csv")
-mat<-vroom::vroom("PE.csv")
-gc()    
-
-i<-metadata%>%select(Run_Tissue_name,protodomain,cell_ID)%>%
-  split(f = metadata$protodomain)
-metagenes<-lapply(i,function(x) mat%>%filter(cell_ID%in%x$cell_ID)%>%select(-1)%>%colMeans())
-temp<-metagenes%>%bind_cols()
-metagenes<-as.matrix(metagenes)
-rownames(metagenes)<-colnames(mat)[-1]
-
-annot<-metadata%>%distinct(protodomain,Class,Run_Tissue_name,dom_nEndoh1_75)
-annot<-annot%>%mutate(index=case_when(dom_nEndoh1_75==6~1,
-                                   dom_nEndoh1_75==3~2,
-                                   dom_nEndoh1_75==4~3,
-                                   dom_nEndoh1_75==2~4,
-                                   dom_nEndoh1_75==1~6,
-                                   TRUE~dom_nEndoh1_75))#as defined in Fig2
-metagenes<-metagenes[,annot$protodomain]
-nobatch<-sva::ComBat(dat = metagenes,batch = annot$Run_Tissue_name,par.prior = T)
-#cor_dist<-cor(nobatch)
-#cl<-hclust(as.dist(1-cor_dist),method="ward.D2")
-
-Heatmap(asinh(nobatch[str_detect(rownames(zscores),
-                                 "Chann|IgG",negate = T),]/5),
-        show_column_names = F,show_row_dend = F,
-        clustering_method_columns = "ward.D2",
-        use_raster = F,name="expr",
-        top_annotation = HeatmapAnnotation(Class=annot$Class,
-                                           D=annot$index,
-                                           Sample=annot$Run_Tissue_name,
-        col=list(Class=classcols,D=domcol,Sample=kelly.colours)),
-        column_split  = annot$index,col = colorRamp2(c(-2,0,2,4,6),                           c("white","#FCFDBF","#FFC28B","#de7065ff","#651B79")))
-
-```
-
 # Composition heatmap
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 compo<-metadata%>%
   count(dom_nEndoh1_75,fov_type)%>%
   group_by(dom_nEndoh1_75)%>%
@@ -129,13 +87,12 @@ pA4<-compo%>%mutate(index=factor(index,levels = 6:1))%>%
           axis.line.y = element_blank(),plot.margin=grid::unit(c(0,3,0,-6), "mm"),
           legend.position = "bottom",legend.direction = "vertical")+
     scale_fill_manual(values = classcols)
-
+plot_grid(pA1,pA2,pA+theme(legend.position = "top"),pA3,pA4,ncol=5,rel_widths = c(.1,.1,.3,.25,.25),align = "h",axis = "tb")
 
 ```
 
-
 # Domain signature 
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 mat<-vroom::vroom("PE.csv")%>%filter(cell_ID%in%metadata$cell_ID)
 mat<-vroom::vroom("endometrium.csv")%>%
   filter(cell_ID%in%metadata$cell_ID)%>%bind_rows(mat)
@@ -160,7 +117,7 @@ domDEG<-pA$data%>%distinct(index,dom_nEndoh1_75)%>%
   inner_join(domDEG,by = c("dom_nEndoh1_75"="cluster"))
 i<-domDEG%>%filter(str_detect(gene,"Chann|IgG",negate = T)&p_val_adj<0.05)%>%
   group_by(index)%>%slice_max(avg_log2FC,n=3)
-pB<-domDEG%>%filter(gene%in%i$gene)%>%
+domDEG%>%filter(gene%in%i$gene)%>%
   mutate(gene=factor(gene,levels = i$gene))%>%
   ggplot(aes(y=index,x=gene,col=avg_log2FC,size=p_val_adj))+
   geom_point()+scale_size(range=c(5,1),trans = "sqrt",
@@ -171,9 +128,11 @@ pB<-domDEG%>%filter(gene%in%i$gene)%>%
 
 
 ```
+
 # Example space plots: squidpy
+
 # Cell composition contrast
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 dombars<-lapply(names(classcols),function(x)
     metadata%>%filter(Class==x)%>%count(Class,dom_nEndoh1_75)%>%
         ggplot(aes(y=Class,x=n,fill=as.factor(dom_nEndoh1_75)))+
@@ -203,14 +162,15 @@ pD<-temp%>%
                           legend.position = "left")+
     labs(x="Proportion",fill="Cell type")
 
-partD<-plot_grid(dombars$`Eutopic endometrium`,cellbars$`Eutopic endometrium`,
+partA<-plot_grid(dombars$`Eutopic endometrium`,cellbars$`Eutopic endometrium`,
           dombars$`Peritoneal endometriosis`,cellbars$`Peritoneal endometriosis`,nrow=2,ncol=2,align="vh",axis = "lr")
 
-pD1<-temp%>%group_by(index,fov_type)%>%summarise(n=sum(n))%>%
+partB<-temp%>%group_by(index,fov_type)%>%summarise(n=sum(n))%>%
   ggplot(aes(x=n,y=index,fill=fov_type))+
   geom_bar(stat="identity",position="fill")+
   scale_fill_manual(values=cellcols)+
   theme_void()+theme(legend.position = "n")
+plot_grid(partA,partB)
 #test
 temp<-split(metadata,f = metadata$dom_nEndoh1_75)
 props<-lapply(temp,function(x) 
@@ -228,14 +188,15 @@ fit<-lapply(1:6,function(x) contrasts.fit(fit[[x]],cont[[x]]))
 fit <- lapply(fit,eBayes, robust=TRUE)
 
 res<-lapply(fit,function(x) topTable(x,number = length(cellcols),coef = 1))
-res<-lapply(1:6, function(x)
+lapply(1:6, function(x)
   res[[x]]%>%as.data.frame()%>%
     rownames_to_column("cell_type")%>%
     mutate(dom=x))%>%bind_rows()
 #nothing is significant
 ```
+
 # Neighbors
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 files<-list.files("nets",full.names = T)
 files<-files[str_detect(files,"delau")]
 
@@ -289,6 +250,7 @@ pF1<-temp%>%ggplot(aes(x=prop,y=index,col=as.factor(index)))+
     labs(y="domain",x="interaction partners")+scale_x_sqrt()+
     scale_color_manual(values=domcol)+theme_classic()+
     theme(legend.position = "n")
+plot_grid(pF,pF1)
 
 #density
 temp<-edges%>%group_by(dom_to,Run_Tissue_name,type_to,type_from)%>%
@@ -307,14 +269,11 @@ pE<-temp%>%ggplot(aes(x=avg_dist,y=as.factor(index),
         axis.ticks.y = element_blank())
 
 
-partA<-plot_grid(pA1,pA2,pA+theme(legend.position = "top"),pA3,pA4,pB,ncol=6,rel_widths = c(.05,.05,.3,.15,.15,.3),align = "h",axis = "tb")
-partB<-plot_grid(pD,plot_grid(pE,partD),plot_grid(pF,pF1),nrow = 3)
-pdf("temp.pdf",width = 13,height = 9)
- plot_grid(partA,plot_grid(pD1,partB,rel_widths = c(.4,.6)),nrow = 2,rel_heights = c(.3,.7))
-dev.off()
+plot_grid(pD,pE)
 ```
+
 # Blob size
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 metadata<-metadata%>%filter(dom_nEndoh1_75==6)
 
 samples<-unique(metadata$Run_Tissue_name)
@@ -339,7 +298,7 @@ blobs<-lapply(names(dom6), function(x)
 #  guides(col = guide_legend(override.aes = list(size = 5)))
 blobs<-blobs%>%mutate(Class=str_replace(Class,".+ e","E"))%>%
               mutate(Class=factor(Class,levels=c("Endometrium","Endometriosis")))
-pG<-blobs%>%count(Class,Run_Tissue_name,dbcl,name="Size")%>%
+blobs%>%count(Class,Run_Tissue_name,dbcl,name="Size")%>%
     ggplot(aes(x=Size,y=Class,fill=Class))+
     geom_density_ridges()+theme_classic()+
     scale_fill_manual(values=classcols)+
@@ -349,40 +308,16 @@ pG<-blobs%>%count(Class,Run_Tissue_name,dbcl,name="Size")%>%
 ```
 
 ## blob composition
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 temp<-blobs%>%filter(str_detect(fov_type,"B|CD|Mye|Plas|NK"))%>%
   count(Class,Run_Tissue_name,dbcl,fov_type,name="cells")%>%
   group_by(Class,Run_Tissue_name,dbcl)%>%
   mutate(total=sum(cells),prop=100*cells/total)%>%
   ungroup()
 
-#pH1<-temp%>%count(Class,fov_type)%>%
-#  left_join(temp%>%distinct(Class,Run_Tissue_name,dbcl)%>%
-#              count(Class,name = "total"))%>%mutate(prop=100*n/total)%>%
-#  ggplot(aes(x=Class,y=prop,fill=fov_type))+geom_col()+facet_grid(~fov_type)+
-#    theme_classic()+theme(axis.text.x = element_blank(),
-#                                strip.background = element_blank(),
-#                                plot.margin=grid::unit(c(0,0,-4,0), "mm"))+
-#    labs(x="",y="% of instances")+
-#  scale_fill_manual(values=cellcols)+theme(legend.position = "none")
-#
-#pH2<-temp%>%ggplot(aes(x=Class,y=prop,col=fov_type,group=Class))+
-#    geom_violin()+
-#    geom_jitter(aes(size=total),width = .1,alpha=0.5)+
-#  scale_color_manual(values=cellcols)+
-#    stat_compare_means(method = "wilcox.test",label="p.signif",
-#                       hide.ns = T,comparisons = list(c("Endometrium","Endometriosis")))+
-#  facet_grid(~fov_type)+theme_classic()+
-#  theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
-#        strip.background = element_blank(),strip.text.x = element_blank())+
-#    labs(x="",y="% per instance",size="Size")+
-#    scale_color_manual(values=cellcols)+guides(col="none")
-#partB<-plot_grid(pB0,pB1,nrow=2,align = "v",axis = "lr",rel_heights = c(.3,.7))
-#partA<-plot_grid(plot_grid(pA0,NULL,nrow=2,rel_heights = c(.75,.25)),partB,rel_widths = c(.25,.75))
-
 temp<-temp%>%ungroup()%>%mutate(box=cut(total,breaks = 10))
 formula <- y ~ x    
-pG1<-temp%>%filter(total<2000)%>%
+temp%>%filter(total<2000)%>%
   ggplot(aes(x= total, y= prop, group=fov_type,color = fov_type)) +
                   geom_smooth(method = "loess", formula = formula, se = F,)+
                   scale_color_manual(values=cellcols)+

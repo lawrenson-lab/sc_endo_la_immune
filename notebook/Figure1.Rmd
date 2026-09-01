@@ -310,7 +310,7 @@ pF3<-pF1$data %>%
     theme(strip.background = element_blank(),
           panel.grid = element_blank(),
           legend.position = "n")+labs(x="UMAP 1")
-plot_grid(pF1,pF2,pF3,nrow=3,align='v',axis="lr",rel_heights = c(.35,.65))
+plot_grid(pF1,pF2,pF3,nrow=3,align='v',axis="lr")
 
 ```
 

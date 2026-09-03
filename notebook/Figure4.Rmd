@@ -1,32 +1,27 @@
 ---
 title: "Fig.4"
 ---
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 library(Seurat)
-#library(clusterProfiler)
+library(tidyverse)
 library(CellChat)
 library(ggrepel)
 library(ggpubr)
 library(rstatix)
-#library(limma)
 library(introdataviz)
 library(ggtext)
 library(ComplexHeatmap)
+library(cowplot)
 source("script/netVisual_diffInteraction_fixed.R")
 
 lacols<-c("LA+"="#8DB600","LA-"="#5E4FA2",none="white")
-
-deg<-read_csv("docs/has_laDEG-nosub_bulk-MAST.tsv")
-gsea_bp<-read_csv("docs/has_laDEG-nosubbulk-GSEA-BPsimpl.csv")
-avgs<-read_csv("docs/hasLA_nosub_avg.csv")
 ```
-# Neighbors
 
-```{r}
+# Neighbors
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 files<-list.files()
-files<-files[str_detect(files,"bg")][-1]#no endometrioma
+files<-files[str_detect(files,"bg")]#no endometrioma
 metadata<-lapply(files,vroom::vroom)%>%bind_rows()
-gc()
 
 files<-list.files("nets",full.names = T)
 files<-files[str_detect(files,"delau")]
@@ -75,9 +70,16 @@ pA0<-temp%>%ggplot(aes(x=index,y=interacting_ct,fill=chisq_residuals))+
 pA00<-temp%>%group_by(index)%>%summarise(n=sum(n))%>%
   ggplot(aes(x=index,y=n))+geom_col()+theme_classic()
 
+plot_grid(pA00+theme(axis.text.x = element_blank(),
+                            axis.ticks.x = element_blank(),axis.line.x = element_blank(),
+                     plot.margin=grid::unit(c(0,0,-5,0),"mm"))+labs(x=""),
+          pA0+theme_bw()+theme(panel.grid = element_blank()),nrow=2,
+          align = "v",axis = "lr",rel_heights = c(.4,.6))
+
 ```
+
 # Cell chat
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 cc_res<-readRDS("data/CellChat_PE_hasLA_exclude.rds")
 
 cts<-rownames(cc_res[[1]]@net$`TRUE`$count)
@@ -104,25 +106,28 @@ pA3<-netVisual_diffInteraction(cc_res[[1]],#color.use = alt_cellcols,
                           weight.scale = T)
 
 ## top pathways/ct
-pairs <- list("LA-"=subsetCommunication(cc_res$LAneg),
-              "LA+"=subsetCommunication(cc_res$LApos))
+pairs <- list("LA-"=subsetCommunication(cc_res$`FALSE`),
+              "LA+"=subsetCommunication(cc_res$`TRUE`))
 pairs<-lapply(names(pairs), function(x) pairs[[x]]%>%mutate(has_LA=x))%>%bind_rows()
 pairs<-pairs%>%filter(source!="Erythrocytes"&target!="Erythrocytes")
 temp<-pairs%>%filter((source=="EnEpi cells"&str_detect(target,"Smo|En|Mes|Ery",negate=T))|
                      (target=="EnEpi cells"&str_detect(source,"Smo|En|Mes|Ery",negate=T)))
+deg<-read_csv("docs/all_pseudobulkDEG_scavg.csv")
 sources<-temp%>%mutate(ct=source,gene=ligand)%>%distinct(ct,gene)%>%inner_join(deg)
 targets<-temp%>%mutate(ct=target,gene=receptor)%>%distinct(ct,gene)%>%inner_join(deg)
 ```
+
 # Top enrichment
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+gsea_bp<-read_csv("docs/has_laDEG-nosubbulk-GSEA-BPsimpl.csv")
+
 i<-gsea_bp%>%filter(str_detect(ct,"En"))%>%
   separate_rows(core_enrichment,sep = '/')%>%
   distinct(ct,core_enrichment)
 colnames(i)[2]<-"gene"
-subdeg<-deg%>%inner_join(i)
-subdeg<-avgs%>%group_by(ct)%>%
-  filter(`LA-`>quantile(`LA-`,.95)|`LA+`>quantile(`LA+`,.95))%>%#0.5 for Th2 cells
-  inner_join(subdeg)
+subdeg<-deg%>%group_by(ct)%>%
+  filter(`LA-`>quantile(`LA-`,.95)|`LA+`>quantile(`LA+`,.95))
+
 subdeg<-subdeg%>%slice_max(abs(avg_log2FC),n=20)
 subdeg<-gsea_bp%>%separate_rows(core_enrichment,sep = '/')%>%
   mutate(gene=core_enrichment)%>%select(Description,NES,gene,ct)%>%
@@ -144,13 +149,13 @@ enspaths<-c("positive regulation of neurogenesis",
             "wound healing",
             "endothelial cell proliferation",
             "response to type II interferon")
-pB<-gsea_bp%>%filter(Description%in%enepaths&ct=="EnEpi cells")%>%
+gsea_bp%>%filter(Description%in%enepaths&ct=="EnEpi cells")%>%
     arrange(NES)%>%mutate(Description=factor(Description,
                                              levels = unique(Description)))%>%
     ggplot(aes(x=NES,y=Description,col=NES,size=p.adjust))+geom_point()+
     scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b")+
     scale_size(range=c(3,5))+theme_classic()+theme(panel.grid = element_blank())
-pB1<-gsea_bp%>%filter(Description%in%enspaths&ct=="EnS cells")%>%
+gsea_bp%>%filter(Description%in%enspaths&ct=="EnS cells")%>%
     arrange(NES)%>%mutate(Description=factor(Description,
                                              levels = unique(Description)))%>%
     ggplot(aes(x=NES,y=Description,col=NES,size=p.adjust))+geom_point()+
@@ -158,8 +163,9 @@ pB1<-gsea_bp%>%filter(Description%in%enspaths&ct=="EnS cells")%>%
     scale_size(range=c(3,5))+theme_classic()+theme(panel.grid = element_blank())
 
 ```
+
 # Top genes
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"))
 sc@meta.data<-sc@meta.data%>%mutate(has_LA=ifelse(LA_per_Sample>0,"LA+","LA-"))
@@ -169,11 +175,11 @@ sc@meta.data<-sc@meta.data%>%
 gc()
 
 
-pC<-DotPlot(subset(sc,subset = harmonized_major_cell_type=="EnEpi cells"),
+DotPlot(subset(sc,subset = harmonized_major_cell_type=="EnEpi cells"),
             features = enepgenes,group.by = "has_LA")+coord_flip()+
     scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b")+
     scale_size(range=c(1,5))+theme(axis.text = element_text(size=11))
-pC1<-DotPlot(subset(sc,subset = harmonized_major_cell_type=="EnS cells"),
+DotPlot(subset(sc,subset = harmonized_major_cell_type=="EnS cells"),
             features = ensgenes,group.by = "has_LA")+coord_flip()+
     scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b")+
     scale_size(range=c(1,5))+theme(axis.text = element_text(size=11))
@@ -181,24 +187,25 @@ pC1<-DotPlot(subset(sc,subset = harmonized_major_cell_type=="EnS cells"),
 ```
 
 # Progeny
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 progeny<-data.table::fread("data/progeney_scores.tsv")
-progeny<-aux_table%>%select(barcode,has_LA,harmonized_major_cell_type,SampleName)%>%
-  inner_join(progeny,by=c("barcode"="Cell"))
+progeny<-sc@meta.data%>%rownames_to_column("Cell")%>%
+  select(Cell,has_LA,harmonized_major_cell_type,SampleName)%>%
+  inner_join(progeny)
 
-pD<-progeny%>%filter(harmonized_major_cell_type=="EnEpi cells")%>%
+progeny%>%filter(harmonized_major_cell_type=="EnEpi cells")%>%
   ggplot(aes(x=has_LA,y=Estrogen,colour = has_LA))+
   geom_violin()+geom_boxplot(width=.1)+
   stat_compare_means(label='p.signif',comparisons = list(c("LA+","LA-")))+
   theme_classic()+labs(x="")+scale_color_manual(values=lacols)+
   theme(legend.position = "n")
-pD1<-progeny%>%filter(harmonized_major_cell_type=="EnEpi cells")%>%
+progeny%>%filter(harmonized_major_cell_type=="EnEpi cells")%>%
     ggplot(aes(x=has_LA,y=WNT,colour = has_LA))+
     geom_violin()+geom_boxplot(width=.1)+
     stat_compare_means(label='p.signif',comparisons = list(c("LA+","LA-")))+
     theme_classic()+labs(x="")+scale_color_manual(values=lacols)+
   theme(legend.position = "n")
-pD2<-progeny%>%filter(harmonized_major_cell_type=="EnS cells")%>%
+progeny%>%filter(harmonized_major_cell_type=="EnS cells")%>%
     ggplot(aes(x=has_LA,y=TGFb,colour = has_LA))+
     geom_violin()+geom_boxplot(width=.1)+
     stat_compare_means(label='p.signif',comparisons = list(c("LA+","LA-")))+
@@ -208,52 +215,12 @@ pD2<-progeny%>%filter(harmonized_major_cell_type=="EnS cells")%>%
 ```
 
 ## Menstrual cycle
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 #meta<-meta%>%mutate(cycle=case_when(Run_Tissue_name%in%c("BEME541_Endometriosis-795R3","6480D2-PT7")~"Hormone",Run_Tissue_name%in%c("BEME209-Endometrium","BEME550-Endometrium","6318B1-PT20","BEME518_Endometriosis_1023-A2","BEME523-Endometriosis","1019F1-PT9")~"Follicular",Run_Tissue_name%in%c("BEME228-9152C4-PT14","BEME596-Endometrium","BEME142_1044B1-PT4","BEME005-3042A1-PT11","BEME540-Endometriosis","1194A4-PT5" )~"Luteal"))
-i<-c("SERPING1","FOXO1","CRYAB","FGF7","IDO1","IGFBP1")
-pE<-DotPlot(subset(sc,subset = harmonized_major_cell_type=="EnS cells"),
+i<-c("SERPING1","FOXO1","CRYAB","FGF7","IDO1")
+DotPlot(subset(sc,subset = harmonized_major_cell_type=="EnS cells"),
               features = i,group.by = "has_LA")+coord_flip()+
     scale_color_gradient2(low="#2166ac", mid = "#f7f7f7", high = "#b2182b")+
     scale_size(range=c(1,5))+theme(axis.text = element_text(size=11))
 
-```
-# arrange figure
-```{r}
-partA<-plot_grid(pA00+theme(axis.text.x = element_blank(),
-                            axis.ticks.x = element_blank(),axis.line.x = element_blank(),
-                     plot.margin=grid::unit(c(0,0,-5,0),"mm"))+labs(x=""),
-          pA0+theme_bw()+theme(panel.grid = element_blank()),nrow=2,
-          align = "v",axis = "lr",rel_heights = c(.4,.6))
-partB<-plot_grid(pB,pC,pD,pD1,NULL,ncol=5,labels =c('D','E','F'),rel_widths = c(.25,.25,.1,.1,.3),align = 'h',axis = "tb")
-partC<-plot_grid(pB1,pC1,pD2,pE,NULL,ncol=5,labels = c('H','I','J','K'),rel_widths = c(.25,.25,.1,.1,.3))
-```
-
-# Markers
-```{r}
-#degsc<-read_csv("docs/has_laDEG-ct100-MAST.tsv",skip=1)
-i<-deg%>%filter(avg_log2FC>=.3)%>%distinct(gene,ct)#ideal LFC threshold
-temp<-pairs%>%inner_join(i,by=c("ligand"="gene","source"="ct"))
-temp<-temp%>%inner_join(i,by=c("receptor"="gene","target"="ct"))
-temp<-temp%>%pivot_wider(names_from = has_LA,values_from = prob)%>%
-  filter(`LA+`>`LA-`|is.na(`LA-`))%>%pivot_longer(`LA+`:`LA-`,names_to = "has_LA",values_to = "prob")
-temp%>%filter(str_detect(interaction_name_2,"COL",negate=T))%>%ggplot(aes(y=paste0(source,' - ',target),x=has_LA,col=prob))+geom_point()+theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1))+facet_wrap(~interaction_name_2,scales="free",space="free_y",ncol=2)+scale_color_viridis_c(option = "H")
-
-i<-c("Prostaglandin","VISFATIN","OSM","IFN-II","VEGF","CXCL")
-i<-pairs%>%filter(pathway_name%in%i)%>%
-  distinct(ligand,receptor,pathway_name)
-i<-i%>%mutate(interaction=1:nrow(i))%>%
-  pivot_longer(1:2,names_to = "type",values_to = "gene")%>%
-  separate_rows(gene,sep = "-|_")%>%
-  mutate(interaction=paste(pathway_name,interaction))
-
-temp<-DotPlot(subset(sc,subset=has_LA=="LA+"),
-              group.by = "nosub",features = unique(i$gene))
-temp1<-DotPlot(subset(sc,subset=has_LA=="LA-"),
-               group.by = "nosub",features = unique(i$gene))
-temp<-temp$data%>%mutate(has_LA="LA+")
-temp<-temp1$data%>%mutate(has_LA="LA-")%>%bind_rows(temp)
-temp%>%ggplot(aes(x=has_LA,y=id,col=avg.exp,size=pct.exp))+geom_point()+
-  scale_color_viridis_c(option = "H")+facet_grid(~features.plot)
-
-pE<-plotGeneExpression(cc_res[[1]], signaling = "IFN-II", split.by = "datasets", type = "violin",color.use = c("#f46d43","#8DB600"))
 ```

@@ -7,6 +7,7 @@ library(Seurat)
 library(tidyverse)
 library(ggrepel)
 library(ggpubr)
+library(readxl)
 
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"&
@@ -29,7 +30,7 @@ sc<-AddMetaData(sc,metadata = aux_table,col.name = "nosub")
 
 ```
 
-## ARID5B
+## sc FC
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 deg<-data.table::fread("docs/hasLA_DEG_sc_newMyeloid_MAST.gz")
 
@@ -79,7 +80,132 @@ bulk%>%ggplot(aes(x=Stage,y=ARID5B_CPM))+
   theme(axis.text.x = element_text(angle=45,vjust =1,hjust = 1))
 
 ```
-# D-G by Sueanne's ARID5B_KD.R
+
+# ARID5B IPSC (script/ARID5B_MME.R)
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+raw_data <- read_excel("data/paper_figure.xlsx",
+                       sheet = "Main figure data")
+timepoint_order <- c("iPSC", "D0", "D4", "D8", "D12", "D20", "D28")
+available_timepoints <- timepoint_order[timepoint_order %in% colnames(raw_data)]
+gene_order <- c("ARID5B", "MME")
+plot_data <- raw_data %>%
+  filter(Gene %in% gene_order) %>%
+  pivot_longer(cols = all_of(available_timepoints),
+    names_to = "Timepoint",
+    values_to = "FoldChange") %>%
+  mutate(Gene = factor(Gene,
+      levels = gene_order),
+    Timepoint = factor(Timepoint,
+      levels = available_timepoints))
+summary_data <- plot_data %>%
+  group_by(Gene, Timepoint) %>%
+  summarise(Mean = mean(FoldChange, na.rm = TRUE),
+    SD = sd(FoldChange, na.rm = TRUE),
+    .groups = "drop")
+
+ggplot() +
+  geom_col(data = summary_data,
+    aes(x = Timepoint, y = Mean),
+    width = 0.70,
+    fill = NA,
+    color = "black",
+    linewidth = 0.65) +
+  geom_errorbar(data = summary_data,
+    aes( x = Timepoint, ymin = pmax(Mean - SD, 0),ymax = Mean + SD),
+    width = 0.18,
+    linewidth = 0.60,
+    color = "black") +
+  geom_point(data = plot_data,
+    aes(x = Timepoint,y = FoldChange),
+    position = position_jitter( width = 0.10,height = 0,seed = 123),
+    shape = 21,
+    size = 2.7,
+    stroke = 0.65,
+    fill = scales::alpha("#6B8E23", 0.5),
+    color = "black") +
+  facet_wrap(vars(Gene),ncol = 1,scales = "free_y") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = NULL,y = "Fold change relative to iPSC") +
+  theme_classic(base_size = 11) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(color = "black",margin = margin(r = 12)),
+      axis.text = element_text(color = "black"),
+      axis.text.x = element_text(angle = 45,hjust = 1,vjust = 1),
+      axis.line.x = element_line(linewidth = 0.65,color = "black"),
+      axis.line.y = element_line(linewidth = 0.65,color = "black"),
+      axis.ticks = element_line(linewidth = 0.50,color = "black"),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "italic",color = "black"),
+      panel.spacing = grid::unit(1.3,"lines"))
+```
+
+# ARID5B KD (script/ARID5B_KD.R)
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+gsea_summary<-read_csv("data/All_Contrasts_Hallmark_GSEA_Summary_filtered.csv")
+i<-gsea_summary %>%
+    filter(!is.na(NES), !is.na(p.adjust)) %>%
+    mutate(pass = abs(NES) >= 1.5 & p.adjust < 0.05) %>%
+    filter(pass) %>%
+    group_by(Treatment, pathway) %>%
+    summarise(n_pass      = n_distinct(Timepoint),
+              max_abs_NES = max(abs(NES)),
+              direction   = ifelse(NES[which.max(abs(NES))] >= 0, "Up", "Down"),
+              .groups = "drop") %>%
+    filter(n_pass >= 2) %>% group_by(Treatment) %>%
+        slice_max(order_by = max_abs_NES, n = 10) 
+gsea_summary%>%filter(pathway%in%i$pathway)%>%
+  mutate(Treatment=factor(Treatment,levels=c("Basal", "E2", "MPA", "cAMP")))%>%
+  ggplot(aes(x=Timepoint,y=pathway,col=NES,size=p.adjust))+geom_point()+
+  facet_wrap(~Treatment,ncol=4)+theme_classic()+
+  theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
+        strip.background = element_blank())+
+  scale_color_gradient2(low="#2166ac",mid="#f7f7f7",high = "#b2182b")+
+  scale_size(range=c(5,1),trans = "sqrt",breaks = c(1e-7,1e-5,1e-2,1))+labs(size="Padj")
+
+treatments<-c("Basal", "E2", "MPA", "cAMP")
+timepoints<-c("72h", "96h", "120h", "192h")
+file<-"data/siARID5B_vs_NTC_all_contrasts_limma_voom_filtered.xlsx"
+contrast_sheets <- readxl::excel_sheets(file)
+parse_contrast <- function(sheet_name) {
+  parts <- strsplit(sheet_name, "_")[[1]]
+  n <- length(parts)
+  list(Treatment = parts[n - 1], Timepoint = parts[n])
+}
+all_filtered_res <- map_dfr(contrast_sheets, function(sheet_name) {
+  parsed <- parse_contrast(sheet_name)
+  readxl::read_excel(file, sheet = sheet_name) %>%
+    mutate(Contrast  = sheet_name,
+           Treatment = parsed$Treatment,
+           Timepoint = parsed$Timepoint)}) %>%
+  mutate(Treatment = factor(Treatment, levels = treatments),
+         Timepoint = factor(Timepoint, levels = timepoints))
+gene_sets <- list(
+  #"TGF-\u03B2 Signaling" = c("TGFBR1", "CDKN1C", "SMAD3", "SERPINE1", "ID2", "ID3"),
+  "Decidualization" = c("HOXA10", "PRL", "IGFBP1", "LEFTY2", "FOXO1", "WNT4", "HSD11B1","PGR"),
+  "Cholesterol" = c("ACAT2", "CD9", "ALCAM","SREBF2", "HMGCR", "HMGCS1", "MVD"), #1 from basal, 1 from MPA, 1 from cAMP
+  "Angiogenesis" = c("POSTN", "SPP1","LUM"), #1 from basal, 1 from E2, 1 from MPA
+  "E2F targets / proliferation" = c("E2F8", "DLGAP5", "BIRC5","CDC20"), #1 from basal, cAMP, 1 from E2, 1 from MPA
+  "Epithelial-mesenchymal transition" = c("MGP", "SERPINE2","COL11A1"), # 1 from each treatment
+  "TNFA-NFKB" = c("BHLHE40", "PLAU"), #1 from MPA, 1 from cAMP
+  "IL-6/JAK-STAT3 signaling" = c("CD14", "SOCS3", "ITGB3","SOCS1"), # 3 from cAMP
+  "TNF superfamily ligands" = c("TNFSF4", "TNFSF18")
+)
+temp<-all_filtered_res%>%filter(SYMBOL%in%unlist(gene_sets))
+gene_sets<-lapply(names(gene_sets), function(x) 
+  as.data.frame(cbind(SYMBOL=gene_sets[[x]],set=x)))%>%bind_rows()
+temp<-temp%>%left_join(gene_sets)
+temp%>%mutate(Timepoint=factor(Timepoint,levels=timepoints),
+              Treatment=factor(Treatment,levels=treatments))%>%
+  ggplot(aes(x=SYMBOL,y=Timepoint,col=logFC,size=adj.P.Val))+geom_point()+
+  facet_grid(rows=vars(Treatment),cols=vars(set),
+             scales="free",space="free")+theme_classic()+
+    theme(axis.text.x = element_text(angle=45,vjust = 1,hjust = 1),
+          strip.background = element_blank())+
+    scale_color_gradient2(low="#2166ac",mid="#f7f7f7",high = "#b2182b",
+                          oob=scales::squish,limits=c(-3,3))+
+  scale_size(range=c(5,1),trans="sqrt",breaks = c(1e-16,1e-8,1e-4))+
+  labs(x="",size="Padj",col="LFC")
+```
 
 # TNFRSF18
 ```{r echo=TRUE, message=FALSE, warning=FALSE}

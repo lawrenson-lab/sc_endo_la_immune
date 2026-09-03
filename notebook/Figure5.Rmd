@@ -2,7 +2,12 @@
 title: "Figure 5"
 ---
 
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(Seurat)
+library(tidyverse)
+library(ggrepel)
+library(ggpubr)
+
 sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
 sc<-subset(sc,cells = which(sc$Class=="Peritoneal endometriosis"&
               str_detect(sc$harmonized_major_plus_immune_cell_type,"^Ex|Ery",negate = T)))
@@ -25,7 +30,7 @@ sc<-AddMetaData(sc,metadata = aux_table,col.name = "nosub")
 ```
 
 ## ARID5B
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 deg<-data.table::fread("docs/hasLA_DEG_sc_newMyeloid_MAST.gz")
 
 temp<-deg%>%filter(ct=="EnS cells")%>%
@@ -34,7 +39,7 @@ temp<-deg%>%filter(ct=="EnS cells")%>%
                           TRUE~"Not.Sig"))
 #min(temp$p_val_adj[temp$p_val_adj>0])
 temp<-temp%>%mutate(p_pos=p_val_adj+p_val_adj+1e-309)
-pA<-temp%>%ggplot(aes(x=avg_log2FC,y=-log10(p_pos),col=STATUS))+
+temp%>%ggplot(aes(x=avg_log2FC,y=-log10(p_pos),col=STATUS))+
     geom_point(size=.5)+geom_text_repel(data=temp%>%filter(STATUS!="Not.Sig")
                                  %>%group_by(STATUS)%>%
                                      slice_min(p_pos,n = 5),
@@ -47,7 +52,7 @@ pA<-temp%>%ggplot(aes(x=avg_log2FC,y=-log10(p_pos),col=STATUS))+
   labs(x="LFC",y="-log10(P.adj)")   
 
 temp<-DotPlot(sc,features = "ARID5B",group.by = "nosub",split.by = "has_LA")
-pB<-temp$data%>%separate(id,into = c("ct","has_LA"),sep = "_")%>%
+temp$data%>%separate(id,into = c("ct","has_LA"),sep = "_")%>%
   filter(ct!="Myeloid cells")%>%arrange(desc(avg.exp))%>%
   mutate(ct=factor(ct,levels=unique(ct)))%>%
   ggplot(aes(x=has_LA,y=ct,col=avg.exp,size=pct.exp))+
@@ -57,7 +62,7 @@ pB<-temp$data%>%separate(id,into = c("ct","has_LA"),sep = "_")%>%
 ```
 
 # Menstrual cycle
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 bulk<-read_csv("data/TMM_normalised_endometrial_expression_ARID5B_IGFBP5_FOXO1.csv")
 bulk<-bulk%>%
   mutate(Stage=case_when(Stage.of.Cycle==1~"Menstrual",
@@ -69,7 +74,7 @@ bulk<-bulk%>%
                                   Stage.of.Cycle==7~"Late-secretory"))%>%
   arrange(Stage.of.Cycle)%>%
   mutate(Stage=factor(Stage,levels=unique(Stage)))
-pC<-bulk%>%ggplot(aes(x=Stage,y=ARID5B_CPM))+
+bulk%>%ggplot(aes(x=Stage,y=ARID5B_CPM))+
   geom_boxplot()+theme_classic()+labs(x="Stage of cycle",y="ARID5B (CPM)")+
   theme(axis.text.x = element_text(angle=45,vjust =1,hjust = 1))
 
@@ -77,23 +82,22 @@ pC<-bulk%>%ggplot(aes(x=Stage,y=ARID5B_CPM))+
 # D-G by Sueanne's ARID5B_KD.R
 
 # TNFRSF18
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 tnk<-subset(sc,cells = which(str_detect(sc$nosub,"T-|NK")))
 temp<-DotPlot(tnk,features = c("TNFRSF18","TNFRSF4"),group.by = "nosub",split.by = "has_LA")
 temp<-temp$data%>%separate(id,into=c("ct","has_LA"),sep = "_")
 
-pF<-temp%>%filter(ct!="Myeloid cells")%>%arrange(desc(avg.exp))%>%
+temp%>%filter(ct!="Myeloid cells")%>%arrange(desc(avg.exp))%>%
     mutate(ct=factor(ct,levels=unique(ct)))%>%
     ggplot(aes(x=has_LA,y=ct,col=avg.exp,size=pct.exp))+
     geom_point()+scale_color_viridis_c(option = 'B',direction = -1)+
     theme_classic()+labs(x="",y="",col="Avg.Exp",size="%")+
   facet_grid(~features.plot)+theme(strip.background = element_blank())
 
-save(pB,pC,pD,pE,pF,pG,file = "docs/Fig5.RData")
-
 ```
+
 # GITR in cosmx
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 
 files<-list.files()
 files<-files[str_detect(files,"bg")][-1]#no endometrioma
@@ -124,7 +128,7 @@ temp<-temp%>%mutate(index=case_when(dom_nEndoh1_75==6~1,
 
 domcol <- c( "gray13", "gold2", "lightskyblue2", "darkorange1", "plum4", "maroon")
 names(domcol)<-6:1
-pG<-temp%>%filter(dom_nEndoh1_75!=7)%>%mutate(Run_Tissue_name=str_remove(cell_ID,"c_.+"))%>%
+temp%>%filter(dom_nEndoh1_75!=7)%>%mutate(Run_Tissue_name=str_remove(cell_ID,"c_.+"))%>%
     group_by(Run_Tissue_name,index,fov_type)%>%summarise(GITR=mean(GITR))%>%
     ggplot(aes(x=as.factor(index),y=GITR,col=as.factor(index)))+
     geom_violin()+geom_boxplot(width=.1)+
@@ -135,13 +139,3 @@ pG<-temp%>%filter(dom_nEndoh1_75!=7)%>%mutate(Run_Tissue_name=str_remove(cell_ID
 
 ```
 
-
-# arrange figure
-```{r}
-partA<-plot_grid(plot_grid(pA,NULL,nrow = 2,rel_heights = c(.7,.3)),pB+theme(legend.position = "bottom"),pC,pD+theme(legend.position = "bottom"),ncol = 4,rel_widths = c(.25,.2,.2,.35),labels = c('A','B','C','D'))
-partB<-plot_grid(NULL,pE,rel_widths = c(.3,.7),labels = c('E','F'))
-partC<-plot_grid(pF,pG,NULL,ncol=3,rel_widths = c(.3,.2,.5))
-pdf("temp.pdf",width = 14,height = 11)
- plot_grid(partA,partB,partC,nrow=3,rel_heights = c(.4,.3,.3))
-dev.off()
-```

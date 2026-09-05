@@ -1,0 +1,177 @@
+---
+title: "Figure 6"
+---
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggbeeswarm)
+library(ggpubr)
+library(Seurat)
+library(ggVennDiagram,lib.loc = "../../R/x86_64-pc-linux-gnu-library/4.5/")
+library(ggalluvial)
+library(ggsankey,lib.loc = "../../R/x86_64-pc-linux-gnu-library/4.5/")
+
+lacols<-c("LA+"="#8DB600","LA-"="#5E4FA2",none="white")
+```
+
+# Study summary 
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#no table, data from the manuscript
+temp<-as.data.frame(cbind(Study=c("BEME","A2"),"LA+"=c(26,10),"LA-"=c(34-26,38-10)))
+temp%>%pivot_longer(-1,names_to = "Status",values_to ="Samples")%>%
+  mutate(Samples=as.numeric(Samples))%>%
+  ggplot(aes(x=Study,y=Samples,fill=Status))+
+  geom_bar(stat="identity",position="stack")+
+  theme_classic()+scale_fill_manual(values = lacols)
+```
+
+# Clinical summary
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+a2age<-read_csv("data/A2_age.csv")
+a2age<-a2age%>%mutate(Status=ifelse(anyLA=="no","LA-","LA+"),Study="A2",Age=age)
+data<-readxl::read_excel("data/Surplus Tables.xlsx",sheet = 5)
+temp<-data%>%mutate(Status=ifelse(LA_Y_N==1,"LA+","LA-"),Study="BEME")%>%
+  distinct(Alternative_Study_ID,Status,Age,Study)%>%
+  drop_na()%>%bind_rows(a2age)
+#from Archive/Sup_Figure1.Rmd
+
+beedata = readxl::read_xlsx("data/2024-02-05_Combine_scGroup_withPriority2_analyze_only_endometriosis_positive_parts_deidentified_Rfile.xlsx", sheet = 5)
+beedata%>%filter(str_detect(Category,"No",negate = T))%>%
+  group_by(`PAPER ID`,Category)%>%
+  summarise(total=sum(`Number of lymphoid aggregates`))%>%
+  ggplot(aes(x=Category,y=total))+geom_quasirandom()+
+  stat_compare_means(label="p.signif",comparisons = list(c("Endometrioma","Endometriosis")))+
+  theme_classic()+labs(y="Lymphoid aggregates")
+
+data%>%distinct(Alternative_Study_ID,Surgery_time,LA_Y_N)%>%
+  mutate(Status=ifelse(LA_Y_N==1,"LA+","LA-"))%>%
+  ggplot(aes(x=Surgery_time,fill=Status))+geom_density(alpha=.5)+
+  scale_fill_manual(values=lacols)+labs(x="Surgery time(min)")+
+  theme_classic()+theme(legend.position = "top")
+```
+
+## From supp table 11
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+temp<-as.data.frame(cbind(Stage=c(1:4),"LA-"=c(4,3,1,0),"LA+"=c(2,4,8,12)))
+temp%>%pivot_longer(-1,names_to = "Status",values_to = "Samples")%>%
+  ggplot(aes(x=Stage,y=Samples,fill=Status))+
+  geom_bar(stat="identity",position="stack")+
+  scale_fill_manual(values=lacols)+theme_classic()+
+  labs(x="ASRM Stage")+
+  theme(legend.position = "n")
+```
+
+## From supp table 13
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+temp<-as.data.frame(cbind(Color=c("other","blue"),"LA+"=c(4,6),"LA-"=c(20,6)))
+temp%>%pivot_longer(-1,names_to = "Status",values_to = "Samples")%>%
+  group_by(Status)%>%mutate(Samples=as.numeric(Samples),
+                            Total=sum(Samples),
+                            Proportion=Samples/Total)%>%
+    ggplot(aes(x=Status,y=Proportion,fill=Color))+
+    geom_bar(stat="identity",position="fill")+geom_text(aes(label=Total,y=1.03))+
+    scale_fill_manual(values=c("#2166ACFF","#BEBEBEFF"))+theme_classic()+
+    theme(legend.position = "top")
+```
+
+# Drugs
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+sc<-readRDS("data/fixed_annotated_aux.seurat.rds")
+sc<-subset(sc,cells = which(sc$Class%in%c("Peritoneal endometriosis","Eutopic endometrium")&
+              str_detect(sc$harmonized_major_plus_immune_cell_type,"^Exc|Ery",negate = T)))
+gc()
+sc$has_LA<-ifelse(sc$LA_per_Sample>0,"LA+","LA-")
+sc@meta.data<-sc@meta.data%>%
+  mutate(nosub=str_remove(harmonized_major_plus_immune_cell_type," \\(.+"))%>%
+  mutate(nosub=str_replace(nosub,"Memmo","Memo"))
+temp<-read_csv("data/myeloid_subgroups.csv")
+aux_table<-sc@meta.data%>%rownames_to_column("barcode")
+aux_table<-temp%>%dplyr::select(barcode,myeloid_cl)%>%
+    right_join(aux_table)%>%
+    mutate(nosub=ifelse(!is.na(myeloid_cl),
+                        myeloid_cl,nosub))%>%
+    dplyr::select(-myeloid_cl)
+aux_table<-aux_table[order(match(aux_table$barcode,colnames(sc))),]
+sc<-AddMetaData(sc,metadata = aux_table,col.name = "nosub")
+
+drug_rank<-read_csv("docs/pb_perLA/LApos/FINAL_drug_ranking.txt")%>%
+  mutate(from="LA+")
+drug_rank<-read_csv("docs/pb_perLA/LAneg/FINAL_drug_ranking.txt")%>%
+  mutate(from="LA-")%>%bind_rows(drug_rank)
+i<-drug_rank%>%distinct(drug_name,from)
+i<-i%>%split(f = i$from)%>%lapply(function(x) x$drug_name)
+ggVennDiagram(i)
+
+drug_rank<-drug_rank%>%separate_rows(pharmacological_effect,sep = ", ")%>%
+  mutate(gene=str_remove(pharmacological_effect," .+"))
+i<-drug_rank%>%distinct(gene)%>%unlist()
+temp<-DotPlot(subset(sc,subset=Class!="Eutopic endometrium"),
+              features = i,
+              group.by = "has_LA")
+i<-temp$data%>%group_by(features.plot)%>%
+  slice_max(avg.exp.scaled)%>%
+  mutate(gene=features.plot)%>%
+  ungroup()%>%select(gene,id)
+i<-drug_rank%>%inner_join(i)%>%
+  distinct(drug_name,pharmacological_effect,id)
+i<-i%>%group_by(drug_name)%>%add_count(id,name = "hg_per_group")%>%
+  mutate(no_annot=sum(str_detect(pharmacological_effect,"NA")),
+         total=n())%>%
+  mutate(target_group=ifelse(total-no_annot==1,
+        as.character(id[str_detect(pharmacological_effect,"NA",negate = T)]),
+        as.character(id[hg_per_group==max(hg_per_group)])))%>%
+  distinct(drug_name,target_group)
+i<-i%>%add_count(drug_name)%>%
+  mutate(target_group=ifelse(n>1,"both",target_group))%>%
+  select(-n)%>%distinct()
+drug_rank<-drug_rank%>%left_join(i)
+drug_rank<-drug_rank%>%
+  mutate(target_group=ifelse(str_detect(drug_name,
+                             "L-|As|Biot|balam|Coag|Strept"),
+                             "likely inactive",target_group))
+i<-drug_rank%>%count(from,target_group)
+ggplot(i,aes(axis1 = from, axis2 = target_group, y = n,fill=from)) +
+    geom_alluvium(alpha = 0.6) +
+    geom_stratum(width = 1/2, color = "grey60") +
+    geom_text(stat = "stratum",
+               aes(label = after_stat(stratum)),
+               size = 4)+
+    scale_x_discrete(limits = c("Origin", "Manual annotation"),
+                     expand = c(0.1, 0.1)) +
+    scale_fill_manual(values=c("#5E4FA2","#8DB600","#BDBABB"))+
+    theme_sankey()+theme(legend.position = "n")
+
+
+drug_rank<-drug_rank%>%group_by(drug_name)%>%
+  mutate(pharmacological_effect=paste(pharmacological_effect,collapse = ", "))
+drug_rank%>%
+  distinct(drug_name,pharmacological_effect,rank,target_group)%>%
+  arrange(target_group,rank)%>%view()#manually select among these
+
+#select targets from the top 26 drugs
+i<-list("LA+"=c("Alteplase",#Tenecteplase
+                "Ibritumomab tiuxetan",#Tositumomab,Rituximab
+                "Etanercept"),#Adalimumab
+        "LA-"=c("Octreotide","Cetuximab","Abciximab"),
+        "both"=c("Collagenase clostridium histolyticum",
+                 "Botulinum toxin type A","Ademetionine"))
+i<-lapply(1:3,function(x) 
+  as.data.frame(cbind(drug_name=i[[x]],group=names(i)[x])))%>%bind_rows()
+i<-i%>%inner_join(drug_rank)%>%
+    distinct(group,drug_name,pharmacological_effect)%>%
+    mutate(pharmacological_effect=str_remove(pharmacological_effect," .+"))%>%
+    distinct()
+i[1,3]<-"PLAUR"#target with > expr%
+i[4,3]<-"SSTR2"#target with > expr%
+i[6,3]<-"ITGA2B"#target with > expr%
+i<-temp$data%>%
+    inner_join(i,by=c("features.plot"="pharmacological_effect"))
+
+i%>%mutate(dt=paste0(drug_name," - ",features.plot))%>%
+  ggplot(aes(x=id,y=dt,col=avg.exp.scaled,size=pct.exp))+geom_point()+
+  facet_wrap(~group,scales = "free_y",space="free_y")+
+  scale_colour_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b")+
+  theme_classic()+theme(strip.text.y = element_text(angle=0,hjust = 0),
+                          strip.background = element_blank(),
+                          panel.spacing = unit(1, "mm"))+
+  labs(x="Status",y="Drug - target",col="z",size='%')
